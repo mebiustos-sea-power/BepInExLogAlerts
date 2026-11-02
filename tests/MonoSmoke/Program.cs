@@ -11,6 +11,12 @@ using BepInExLogAlerts.Core;
 internal static class Program
 {
     private static void Check(bool value, string message) { if (!value) throw new Exception(message); }
+    private static void Click(HistoryInteraction history, HistoryLayout layout, UiRect target)
+    {
+        float x = (target.X + 10) * layout.Scale, y = layout.PixelHeight - (target.Y + 10) * layout.Scale;
+        history.Process(new PointerFrame(x, y, true, false, true), layout, _ => throw new Exception("Unexpected clipboard action."));
+        history.Process(new PointerFrame(x, y, false, true, false), layout, _ => throw new Exception("Unexpected clipboard action."));
+    }
     private sealed class BadMessage { public override string ToString() => throw new InvalidOperationException("Expected conversion failure"); }
     private static int Main(string[] args)
     {
@@ -71,18 +77,39 @@ internal static class Program
             reloaded.SetLevelEnabled(Severity.Fatal, false);
             reloaded = new NotificationRules(store.Load(), store.Save);
             Check(new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !reloaded.IsLevelEnabled(level)) && reloaded.Count == 2 && reloaded.IsIndividuallySuppressed(a) && reloaded.IsIndividuallySuppressed(b), "Mono did not persist all three level choices during the released-format upgrade.");
+            // The earlier callback-failure check intentionally stopped its listener.
+            // Use an independent live subscription for the history-action checks.
+            Logger.Listeners.Remove(listener); listener.Dispose();
+            var historyBox = new LogMailbox(128, reloaded);
+            historyBox.SealStartup(() => 0, out _);
+            listener = new BufferedLogListener(historyBox, false);
+            Logger.Listeners.Add(listener);
             byte[] saved = File.ReadAllBytes(rulePath);
+            byte[] savedLog = access.Snapshot(1024 * 1024).Bytes;
+            var journal = new AlertJournal(20, 10);
+            journal.Add(a, 0); journal.Add(b, 0);
+            var history = new HistoryInteraction(journal, reloaded) { Open = true };
+            var layout = new HistoryLayout(1920, 1080, 1);
+            Click(history, layout, layout.ClearHistory);
+            Check(journal.Items.Count == 2, "Opening confirmation cleared history on Mono.");
+            Click(history, layout, layout.Confirm);
+            Check(journal.Items.Count == 0 && history.Selected == null && File.ReadAllBytes(rulePath).SequenceEqual(saved) && access.Snapshot(1024 * 1024).Bytes.SequenceEqual(savedLog) && reloaded.Count == 2, "Confirmed history clear changed the log file or saved preferences on Mono.");
+            source.LogWarning("After confirmed history clear");
+            foreach (LogRecord record in historyBox.Drain(10)) journal.Add(record, 1);
+            Check(journal.Items.Any(item => item.Record.Message == "After confirmed history clear" && item.Count == 1), "Log reception stopped after clearing history on Mono.");
             using (var held = new FileStream(rulePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 bool failed = false;
-                try { reloaded.Clear(); } catch (IOException) { failed = true; }
+                Click(history, layout, layout.ClearSuppression);
+                Check(reloaded.Count == 2, "Requesting bulk-unmute confirmation changed saved preferences.");
+                try { Click(history, layout, layout.Confirm); } catch (IOException) { failed = true; }
                 Check(failed && reloaded.Count == 2 && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !reloaded.IsLevelEnabled(level)) && File.ReadAllBytes(rulePath).SequenceEqual(saved), "Failed replacement lost the previous settings.");
             }
             Check(Directory.GetFiles(root, "*.tmp").Length == 0, "Failed persistence left an uncommitted temporary file.");
-            reloaded.Clear();
+            Click(history, layout, layout.Confirm);
             reloaded = new NotificationRules(store.Load(), store.Save);
             Check(reloaded.Count == 0 && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !reloaded.IsLevelEnabled(level)) && !reloaded.IsIndividuallySuppressed(a) && !reloaded.IsIndividuallySuppressed(b), "Mono did not preserve level choices while persisting bulk unmute after releasing the file lock.");
-            Console.WriteLine("PASS Released settings, independent levels, atomic replacement, failed-save rollback, and bulk unmute preserving levels on game Mono");
+            Console.WriteLine("PASS Confirmed history clear preserves log/settings files; reception, released settings, failed-save rollback and confirmed bulk unmute work on game Mono");
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

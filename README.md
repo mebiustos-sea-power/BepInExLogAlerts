@@ -24,19 +24,27 @@ Press `F8` to toggle the history. `Escape` or the Close button also closes it. S
 
 History remains available after notifications disappear. It retains up to 200 groups by default and reports how many older groups have been removed when the limit is reached. Recovered file entries are labeled "Startup" because the log file does not provide timestamps from which to recover their original times. The source is the name that emitted the log; it does not establish which mod caused the underlying problem.
 
+## Clearing history and confirming bulk actions
+
+Two action buttons sit below Close on the right, leaving notification controls on the left and more room for history and details. Both Clear history and Reset all individual message mutes require explicit confirmation. Cancel or Escape dismisses the confirmation without running the action. Escape again closes history; closing history also cancels any pending confirmation. Background history controls are inactive while confirmation is open, and log reception continues.
+
+Clear history removes the retained entries, selected details, scroll positions, and old-entry removal count. It does not change log files, notification preferences, or popup notifications. New messages continue to be recorded with fresh history counts. Reset all individual message mutes clears only individual settings and preserves the Warning, Error, and Fatal selections. A failed settings save reports the existing error and preserves the previous settings.
+
+Hover over either action button to see a tooltip explaining what it changes. The history-clear tooltip explicitly states that log files and notification settings are unchanged.
+
 ## Choosing popup notification levels
 
 At the top of the history, the popup heading and its history-retention note share one line to leave more room for history and details. Check Warning, Error, and Fatal to choose which levels produce popups. All three are checked by default. The choices are independent, so Error can be disabled while Fatal remains enabled. Unchecked levels are still collected and retained in history.
 
 Changes take effect immediately and persist across game restarts. Disabling a level removes its visible popups and its contributions to startup summaries. Re-enabling it applies to future occurrences without replaying past messages or restoring removed counts. Individual mute settings are preserved and still apply to enabled levels.
 
-The per-message checkbox controls only the selected message's individual setting. "Reset all muted notifications" clears every individual mute setting while keeping the Warning, Error, and Fatal selections unchanged, including when no history entries are present.
+The per-message checkbox controls only the selected message's individual setting. "Reset all individual message mutes" clears every individual mute setting while keeping the Warning, Error, and Fatal selections unchanged, including when no history entries are present.
 
 ## Muting individual notifications
 
 Select an entry in the history and check "Do not notify me of this log again" to stop its popups. Uncheck it to resume notifications for that entry. Muted messages are still collected and retained in history, where they are marked "Muted".
 
-Use "Reset all muted notifications" at the top of the history to clear individual mute settings, including settings for messages absent from the current session's history. Level selections are unchanged. The button's count includes only individual mute settings, and the button is disabled when none remain. Mute settings persist across game restarts. BepInEx's own warnings and errors remain eligible by default.
+Use "Reset all individual message mutes" at the top of the history to clear individual mute settings, including settings for messages absent from the current session's history. Level selections are unchanged. The button's count includes only individual mute settings, and the button is disabled when none remain. Mute settings persist across game restarts. BepInEx's own warnings and errors remain eligible by default.
 
 A mute setting matches the combination of log level, source, and stored message body. It is independent of startup/live status, timestamp, and occurrence count. Changes to numbers or other text in the body make a different message. There are no wildcard or substring exclusions.
 
@@ -123,7 +131,7 @@ Restored "Reset all muted notifications" to clearing individual message mute set
 
 ## Changes in 0.1.6
 
-Popup headings now use the same font size as the message body, with bold text and a subtle separator line. The startup summary heading is shortened to "Startup logs". Notification dimensions and the history window title retain their existing appearance.
+Popup headings now use the same font size as the message body, with bold text and a subtle separator line. The startup summary heading is shortened to "Startup logs". Added history clear, confirmation dialogs for both bulk actions, and explanatory tooltips. The two action buttons are stacked below Close, leaving more room for history and details. Notification dimensions and the history window title retain their existing appearance.
 
 ## Source and releases
 

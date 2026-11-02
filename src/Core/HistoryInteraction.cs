@@ -24,7 +24,7 @@ internal sealed class HistoryLayout
 {
     internal const float RowStep = 76, RowHeight = 72;
     internal readonly float Scale, PixelHeight;
-    internal readonly UiRect Window, Close, List, Copy, Heading, Detail, ListTrack, DetailTrack, Suppress, ClearSuppression, PopupHeading, NotifyWarning, NotifyError, NotifyFatal;
+    internal readonly UiRect Window, Close, Status, ClearHistory, List, Copy, Heading, Detail, ListTrack, DetailTrack, Suppress, ClearSuppression, PopupHeading, NotifyWarning, NotifyError, NotifyFatal, Confirmation, ConfirmationTitle, ConfirmationBody, Confirm, Cancel;
     internal HistoryLayout(float pixelWidth, float pixelHeight, float configuredScale)
     {
         PixelHeight = pixelHeight;
@@ -33,13 +33,17 @@ internal sealed class HistoryLayout
         float width = Math.Min(1040, canvasWidth - 24), height = Math.Min(760, canvasHeight - 24);
         Window = new UiRect((canvasWidth - width) / 2, (canvasHeight - height) / 2, width, height);
         Close = new UiRect(Window.Right - 88, Window.Y + 12, 72, 28);
-        PopupHeading = new UiRect(Window.X + 16, Window.Y + 84, width - 32, 24);
-        float optionWidth = Math.Min(150, (width - 32) / 3);
+        float actionWidth = Math.Min(340, width - 32), actionX = Window.Right - 16 - actionWidth;
+        float leftHeaderWidth = actionX - Window.X - 32;
+        ClearHistory = new UiRect(actionX, Window.Y + 50, actionWidth, 32);
+        ClearSuppression = new UiRect(actionX, Window.Y + 90, actionWidth, 32);
+        Status = new UiRect(Window.X + 16, Window.Y + 46, leftHeaderWidth, 38);
+        PopupHeading = new UiRect(Window.X + 16, Window.Y + 84, leftHeaderWidth, 24);
+        float optionWidth = Math.Min(150, leftHeaderWidth / 3);
         NotifyWarning = new UiRect(Window.X + 16, Window.Y + 110, optionWidth, 28);
         NotifyError = new UiRect(NotifyWarning.Right, NotifyWarning.Y, optionWidth, 28);
         NotifyFatal = new UiRect(NotifyError.Right, NotifyWarning.Y, optionWidth, 28);
-        ClearSuppression = new UiRect(Window.X + 16, Window.Y + 144, Math.Min(360, width - 32), 32);
-        List = new UiRect(Window.X + 12, Window.Y + 190, Math.Min(390, width * 0.42f), height - 204);
+        List = new UiRect(Window.X + 12, Window.Y + 150, Math.Min(390, width * 0.42f), height - 164);
         float rightX = List.Right + 14, rightWidth = Window.Right - List.Right - 28;
         Heading = new UiRect(rightX, List.Y, rightWidth - 92, 50);
         Copy = new UiRect(Window.Right - 96, List.Y, 82, 30);
@@ -47,6 +51,12 @@ internal sealed class HistoryLayout
         Detail = new UiRect(rightX, List.Y + 106, rightWidth, List.Height - 106);
         ListTrack = new UiRect(List.Right - 16, List.Y, 12, List.Height);
         DetailTrack = new UiRect(Detail.Right - 16, Detail.Y, 12, Detail.Height);
+        float dialogWidth = Math.Min(560, width - 32);
+        Confirmation = new UiRect(Window.X + (width - dialogWidth) / 2, Window.Y + (height - 224) / 2, dialogWidth, 224);
+        ConfirmationTitle = new UiRect(Confirmation.X + 16, Confirmation.Y + 14, dialogWidth - 32, 30);
+        ConfirmationBody = new UiRect(Confirmation.X + 16, Confirmation.Y + 52, dialogWidth - 32, 100);
+        Cancel = new UiRect(Confirmation.Right - 260, Confirmation.Bottom - 48, 116, 32);
+        Confirm = new UiRect(Confirmation.Right - 132, Confirmation.Bottom - 48, 116, 32);
     }
     internal UiRect Row(int display, float scroll) => new UiRect(List.X, List.Y + display * RowStep - scroll, List.Width - 24, RowHeight);
     internal static UiRect Thumb(UiRect track, float contentHeight, float scroll)
@@ -57,7 +67,8 @@ internal sealed class HistoryLayout
     }
 }
 
-internal enum HistoryHit { None, Close, Copy, Row, ListScroll, DetailScroll, Suppress, ClearSuppression, NotifyWarning, NotifyError, NotifyFatal }
+internal enum HistoryHit { None, Close, Copy, Row, ListScroll, DetailScroll, Suppress, ClearSuppression, NotifyWarning, NotifyError, NotifyFatal, ClearHistory, Confirm, Cancel }
+internal enum HistoryConfirmation { None, ClearHistory, ClearSuppression }
 
 internal sealed class HistoryInteraction
 {
@@ -75,7 +86,9 @@ internal sealed class HistoryInteraction
     internal HistoryHit Hover { get; private set; }
     internal AlertItem? HoverItem { get; private set; }
     internal HistoryHit Pressed => pressed;
-    internal bool Open { get => open; set { open = value; CancelPointer(); } }
+    internal HistoryConfirmation Confirmation { get; private set; }
+    internal int ConfirmationCount => Confirmation == HistoryConfirmation.ClearHistory ? journal.Items.Count : Confirmation == HistoryConfirmation.ClearSuppression ? rules.Count : 0;
+    internal bool Open { get => open; set { open = value; DismissConfirmation(); } }
     internal AlertItem? Selected
     {
         get
@@ -87,6 +100,13 @@ internal sealed class HistoryInteraction
     }
     internal HistoryInteraction(AlertJournal journal, NotificationRules rules) { this.journal = journal; this.rules = rules; }
     internal void CancelPointer() { pressed = HistoryHit.None; pressedItem = null; Hover = HistoryHit.None; HoverItem = null; PointerX = PointerY = -1; }
+    internal void Escape()
+    {
+        if (Confirmation != HistoryConfirmation.None) DismissConfirmation();
+        else Open = false;
+    }
+    private void DismissConfirmation() { Confirmation = HistoryConfirmation.None; CancelPointer(); }
+    private void RequestConfirmation(HistoryConfirmation action) { Confirmation = action; CancelPointer(); }
 
     internal void Process(PointerFrame frame, HistoryLayout layout, Action<string> copy)
     {
@@ -95,7 +115,7 @@ internal sealed class HistoryInteraction
         PointerY = (layout.PixelHeight - frame.Y) / layout.Scale;
         ClampScroll(layout);
         _ = Selected;
-        if (frame.Wheel != 0)
+        if (frame.Wheel != 0 && Confirmation == HistoryConfirmation.None)
         {
             // Windows mice report 120 units per notch; normalized devices report 1.
             float steps = Math.Abs(frame.Wheel) > 1 ? frame.Wheel / 120 : frame.Wheel;
@@ -127,7 +147,18 @@ internal sealed class HistoryInteraction
             pressed = HistoryHit.None; pressedItem = null;
             if (action == Hover)
             {
-                if (action == HistoryHit.Close) Open = false;
+                if (action == HistoryHit.Cancel) DismissConfirmation();
+                else if (action == HistoryHit.Confirm && Confirmation != HistoryConfirmation.None)
+                {
+                    if (Confirmation == HistoryConfirmation.ClearHistory)
+                    {
+                        journal.Clear(); selected = null;
+                        ListScroll = DetailScroll = DetailContentHeight = 0;
+                    }
+                    else if (Confirmation == HistoryConfirmation.ClearSuppression) rules.Clear();
+                    DismissConfirmation();
+                }
+                else if (action == HistoryHit.Close) Open = false;
                 else if (action == HistoryHit.Copy && item != null && ReferenceEquals(Selected, item))
                     copy(item.Record.Level + " | " + item.Record.Source + " | ×" + item.Count + "\n" + item.Record.Message);
                 else if (action == HistoryHit.Row && ReferenceEquals(item, hovered))
@@ -137,7 +168,8 @@ internal sealed class HistoryInteraction
                 else if (action == HistoryHit.NotifyWarning) ToggleLevel(Severity.Warning);
                 else if (action == HistoryHit.NotifyError) ToggleLevel(Severity.Error);
                 else if (action == HistoryHit.NotifyFatal) ToggleLevel(Severity.Fatal);
-                else if (action == HistoryHit.ClearSuppression) rules.Clear();
+                else if (action == HistoryHit.ClearHistory) RequestConfirmation(HistoryConfirmation.ClearHistory);
+                else if (action == HistoryHit.ClearSuppression) RequestConfirmation(HistoryConfirmation.ClearSuppression);
             }
         }
         else if (!frame.Held && !frame.Pressed) { pressed = HistoryHit.None; pressedItem = null; }
@@ -153,7 +185,14 @@ internal sealed class HistoryInteraction
     private HistoryHit Hit(HistoryLayout layout, out AlertItem? item)
     {
         item = null;
+        if (Confirmation != HistoryConfirmation.None)
+        {
+            if (layout.Cancel.Contains(PointerX, PointerY)) return HistoryHit.Cancel;
+            if (ConfirmationCount != 0 && layout.Confirm.Contains(PointerX, PointerY)) return HistoryHit.Confirm;
+            return HistoryHit.None;
+        }
         if (layout.Close.Contains(PointerX, PointerY)) return HistoryHit.Close;
+        if (journal.Items.Count != 0 && layout.ClearHistory.Contains(PointerX, PointerY)) return HistoryHit.ClearHistory;
         if (layout.NotifyWarning.Contains(PointerX, PointerY)) return HistoryHit.NotifyWarning;
         if (layout.NotifyError.Contains(PointerX, PointerY)) return HistoryHit.NotifyError;
         if (layout.NotifyFatal.Contains(PointerX, PointerY)) return HistoryHit.NotifyFatal;

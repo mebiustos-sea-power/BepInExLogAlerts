@@ -334,6 +334,109 @@ internal static class Program
                     Check(rules.Count == 0 && journal.Items.Count == 3, "Checkbox unmute failed or removed history.");
                 }
             });
+            Test("Opening and canceling history clear preserves logs, selection, and notification settings", () =>
+            {
+                foreach (var screen in new[] { (1920f, 1080f, 1f), (3840f, 2160f, 1f), (2560f, 1440f, 1.4f), (1280f, 720f, 2f) })
+                {
+                    var rules = Rules();
+                    var journal = HistoryJournal(3);
+                    rules.SetSuppressed(journal.Items[0].Record, true);
+                    rules.SetLevelEnabled(Severity.Error, false);
+                    var history = new HistoryInteraction(journal, rules) { Open = true };
+                    var selected = history.Selected;
+                    int revision = rules.Revision;
+                    var layout = new HistoryLayout(screen.Item1, screen.Item2, screen.Item3);
+                    Click(history, layout, layout.ClearHistory, _ => throw new Exception("The preview button copied a log."));
+                    Check(history.Confirmation == HistoryConfirmation.ClearHistory && history.Open && journal.Items.Count == 3 && ReferenceEquals(history.Selected, selected), "Opening confirmation changed the retained history or selection.");
+                    Click(history, layout, layout.Cancel, _ => { });
+                    Check(history.Confirmation == HistoryConfirmation.None && journal.Items.Count == 3 && ReferenceEquals(history.Selected, selected), "Canceling history clear changed the retained data.");
+                    Check(rules.Revision == revision && rules.Count == 1 && rules.IsIndividuallySuppressed(journal.Items[0].Record) && !rules.IsLevelEnabled(Severity.Error), "Opening or canceling history clear changed notification settings.");
+                }
+            });
+            Test("Confirmed history clear resets only retained history and scrolling, then new logs start fresh", () =>
+            {
+                foreach (var screen in new[] { (1920f, 1080f, 1f), (3840f, 2160f, 1f), (2560f, 1440f, 1.4f), (1280f, 720f, 2f) })
+                {
+                    var muted = Record("keep this mute");
+                    var rules = new NotificationRules(new NotificationRuleSet(new[] { muted.NotificationId }, false, true, false), _ => throw new Exception("History clear must not save preferences."));
+                    var center = new NotificationCenter(20, 10, 6, 10, rules);
+                    for (int i = 0; i < 30; i++) center.Receive(Record("entry " + i, level: Severity.Error), i);
+                    LogRecord last = center.Journal.Items.Last().Record;
+                    var visible = center.Toasts.Visible.ToArray();
+                    var history = new HistoryInteraction(center.Journal, rules) { Open = true, DetailContentHeight = 2000 };
+                    var layout = new HistoryLayout(screen.Item1, screen.Item2, screen.Item3);
+                    Send(history, layout, layout.List.X + 20, layout.List.Y + 20, false, false, false, -1200, _ => { });
+                    Send(history, layout, layout.Detail.X + 20, layout.Detail.Y + 20, false, false, false, -1200, _ => { });
+                    Check(history.ListScroll > 0 && history.DetailScroll > 0 && center.Journal.Evicted == 10, "The history-clear regression did not exercise scrolling and eviction.");
+                    Click(history, layout, layout.ClearHistory, _ => { });
+                    Check(center.Journal.Items.Count == 20 && history.ConfirmationCount == 20, "History was cleared before explicit confirmation.");
+                    Click(history, layout, layout.Confirm, _ => { });
+                    Check(history.Open && history.Confirmation == HistoryConfirmation.None && history.Selected == null && center.Journal.Items.Count == 0 && center.Journal.Evicted == 0, "Confirmed clear left retained entries or eviction counts behind.");
+                    Check(history.ListScroll == 0 && history.DetailScroll == 0 && history.DetailContentHeight == 0, "Confirmed clear left stale pane state.");
+                    Check(rules.Count == 1 && rules.IsIndividuallySuppressed(muted) && !rules.IsLevelEnabled(Severity.Warning) && rules.IsLevelEnabled(Severity.Error) && !rules.IsLevelEnabled(Severity.Fatal) && rules.Revision == 0, "History clear changed notification preferences.");
+                    Check(center.Toasts.Visible.SequenceEqual(visible), "A history-only operation dismissed popup notifications.");
+                    center.Receive(last, 40);
+                    Check(center.Journal.Items.Single().Count == 1 && history.Selected != null, "New occurrences were lost or merged with cleared history.");
+                }
+            });
+            Test("Confirmation blocks background controls and requires a fresh press on its action button", () =>
+            {
+                var rules = Rules(); rules.SetSuppressed(Record("saved mute"), true);
+                var journal = HistoryJournal(25);
+                var history = new HistoryInteraction(journal, rules) { Open = true, DetailContentHeight = 2000 };
+                var selected = history.Selected;
+                int revision = rules.Revision;
+                var layout = new HistoryLayout(1920, 1080, 1);
+                Click(history, layout, layout.ClearSuppression, _ => { });
+                foreach (UiRect target in new[] { layout.Close, layout.ClearHistory, layout.NotifyWarning, layout.Suppress, layout.Copy, layout.Row(1, 0) })
+                    Click(history, layout, target, _ => throw new Exception("A modal confirmation copied background data."));
+                Send(history, layout, layout.List.X + 20, layout.List.Y + 20, false, false, false, -1200, _ => { });
+                Send(history, layout, layout.Detail.X + 20, layout.Detail.Y + 20, false, false, false, -1200, _ => { });
+                Check(history.Open && history.Confirmation == HistoryConfirmation.ClearSuppression && ReferenceEquals(selected, history.Selected) && journal.Items.Count == 25 && rules.Revision == revision && history.ListScroll == 0 && history.DetailScroll == 0, "Confirmation allowed a background operation.");
+                float x = layout.Confirm.X + 20, y = layout.Confirm.Y + 20;
+                Send(history, layout, x, y, false, true, false, 0, _ => { });
+                Send(history, layout, x, y, true, false, true, 0, _ => { });
+                Send(history, layout, 0, 0, false, true, false, 0, _ => { });
+                Check(rules.Count == 1 && history.Confirmation == HistoryConfirmation.ClearSuppression, "A stale release or release outside confirmed a destructive action.");
+                Click(history, layout, layout.Cancel, _ => { });
+                Check(rules.Count == 1 && history.Confirmation == HistoryConfirmation.None && history.Open, "Cancel did not preserve mute settings.");
+            });
+            Test("Escape and closing history cancel either confirmation without replaying a pending action", () =>
+            {
+                foreach (bool clearHistory in new[] { true, false })
+                {
+                    var rules = Rules(); rules.SetSuppressed(Record("saved mute"), true);
+                    var journal = HistoryJournal(3);
+                    var history = new HistoryInteraction(journal, rules) { Open = true };
+                    var layout = new HistoryLayout(1920, 1080, 1);
+                    UiRect target = clearHistory ? layout.ClearHistory : layout.ClearSuppression;
+                    Click(history, layout, target, _ => { });
+                    history.Escape();
+                    Check(history.Open && history.Confirmation == HistoryConfirmation.None && journal.Items.Count == 3 && rules.Count == 1, "Escape closed history or ran the pending action.");
+                    Click(history, layout, target, _ => { });
+                    history.Open = false; history.Open = true;
+                    Send(history, layout, layout.Confirm.X + 20, layout.Confirm.Y + 20, false, true, false, 0, _ => { });
+                    Check(history.Confirmation == HistoryConfirmation.None && journal.Items.Count == 3 && rules.Count == 1, "Reopening history retained or executed stale confirmation state.");
+                    history.Escape();
+                    Check(!history.Open, "Escape without a confirmation no longer closes history.");
+                }
+            });
+            Test("Failed confirmed bulk unmute propagates the error and retains saved preferences", () =>
+            {
+                var record = Record("preserved"); int saves = 0;
+                var rules = new NotificationRules(new NotificationRuleSet(new[] { record.NotificationId }, false, true, false), _ => { saves++; throw new IOException("locked preferences"); });
+                var journal = HistoryJournal(3);
+                var history = new HistoryInteraction(journal, rules) { Open = true };
+                var layout = new HistoryLayout(1920, 1080, 1);
+                Click(history, layout, layout.ClearSuppression, _ => { });
+                Check(saves == 0 && rules.Count == 1, "Requesting confirmation already saved preferences.");
+                bool failed = false;
+                try { Click(history, layout, layout.Confirm, _ => { }); } catch (IOException) { failed = true; }
+                Check(failed && saves == 1 && rules.Count == 1 && rules.IsIndividuallySuppressed(record) && rules.Revision == 0 && !rules.IsLevelEnabled(Severity.Warning) && rules.IsLevelEnabled(Severity.Error) && !rules.IsLevelEnabled(Severity.Fatal), "A failed confirmed reset swallowed the error or partially changed preferences.");
+                Check(history.Open && history.Confirmation == HistoryConfirmation.ClearSuppression, "A failed reset lost its retry/cancel state.");
+                history.Escape();
+                Check(history.Confirmation == HistoryConfirmation.None && rules.Count == 1, "Canceling a failed reset changed preferences.");
+            });
             Test("Bulk reset works when the muted entry is absent from this session's history", () =>
             {
                 var rules = Rules(); rules.SetSuppressed(Record("from a previous launch"), true);
@@ -341,6 +444,8 @@ internal static class Program
                 var history = new HistoryInteraction(journal, rules) { Open = true };
                 var layout = new HistoryLayout(3840, 2160, 1);
                 Click(history, layout, layout.ClearSuppression, _ => { });
+                Check(rules.Count == 1 && history.Confirmation == HistoryConfirmation.ClearSuppression, "Bulk unmute executed before confirmation.");
+                Click(history, layout, layout.Confirm, _ => { });
                 Check(rules.Count == 0 && history.Selected == null && journal.Items.Count == 0, "Reset required a currently selected or retained log.");
             });
             Test("Releasing outside or evicting the selected entry cancels a pending suppression change", () =>
@@ -385,6 +490,8 @@ internal static class Program
                     var history = new HistoryInteraction(new AlertJournal(20, 10), rules) { Open = true };
                     var layout = new HistoryLayout(1920, 1080, 1);
                     Click(history, layout, layout.ClearSuppression, _ => throw new Exception("Bulk unmute copied a log."));
+                    Check(rules.Count == 3 && history.Confirmation == HistoryConfirmation.ClearSuppression, "Bulk unmute ran before its confirmation.");
+                    Click(history, layout, layout.Confirm, _ => { });
                     for (int i = 0; i < levels.Length; i++)
                         Check(rules.IsLevelEnabled(levels[i]) == ((mask & (1 << i)) != 0), "Bulk unmute changed the selected popup levels.");
                     Check(rules.Count == 0 && records.All(record => !rules.IsIndividuallySuppressed(record)), "Bulk unmute left individual rules behind.");
@@ -544,7 +651,8 @@ internal static class Program
                     history.Open = false; history.Open = true;
                     Check(controls.All(c => !rules.IsLevelEnabled(c.Item1)), "Closing history lost the level choices.");
                     Click(history, layout, layout.ClearSuppression, _ => { });
-                    Check(controls.All(c => !rules.IsLevelEnabled(c.Item1)) && rules.Count == 0 && history.Hover != HistoryHit.ClearSuppression, "Bulk unmute changed level choices or remained active without individual rules.");
+                    Click(history, layout, layout.ClearHistory, _ => { });
+                    Check(controls.All(c => !rules.IsLevelEnabled(c.Item1)) && rules.Count == 0 && history.Confirmation == HistoryConfirmation.None, "An empty action opened a confirmation or changed the level choices.");
                     foreach (var control in controls)
                     {
                         float x = control.Item2.X + 20, y = control.Item2.Y + 15;
@@ -572,6 +680,7 @@ internal static class Program
                 Check(!rules.IsIndividuallySuppressed(selected) && rules.IsSuppressed(selected), "Individual unmute incorrectly bypassed the global setting.");
                 Click(history, layout, layout.Suppress, _ => { });
                 Click(history, layout, layout.ClearSuppression, _ => { });
+                Click(history, layout, layout.Confirm, _ => { });
                 Check(!rules.IsLevelEnabled(Severity.Warning) && rules.IsSuppressed(selected) && !rules.IsIndividuallySuppressed(selected) && rules.Count == 0, "Bulk unmute changed the level choice or retained an individual rule in the history UI.");
             });
             Test("All eight level combinations affect popups independently while retaining history", () =>

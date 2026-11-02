@@ -18,6 +18,7 @@ internal sealed class AlertJournal
     private readonly int capacity;
     private readonly double repeatWindow;
     internal AlertJournal(int capacity, double repeatWindow) { this.capacity = capacity; this.repeatWindow = repeatWindow; }
+    internal void Clear() { Items.Clear(); Evicted = 0; }
     internal AlertItem Add(LogRecord record, double now)
     {
         var key = new LogKey(record);

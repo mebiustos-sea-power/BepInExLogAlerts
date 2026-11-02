@@ -14,8 +14,9 @@ internal sealed class OverlayView : IDisposable
     private readonly NotificationRules rules;
     private GUIStyle? title, text, small, row, detail, button, toggle, popupHeading, toastHeading;
     private Font? font;
-    private double copiedUntil;
-    internal bool HistoryOpen { get => history.Open; set => history.Open = value; }
+    private double copiedUntil, tooltipSince;
+    private HistoryHit tooltipTarget;
+    internal bool HistoryOpen { get => history.Open; set { history.Open = value; tooltipTarget = HistoryHit.None; } }
     internal OverlayView(AlertSettings settings, UiText words, NotificationCenter notifications)
     {
         this.settings = settings; this.words = words;
@@ -26,13 +27,22 @@ internal sealed class OverlayView : IDisposable
     internal void ProcessPointer(PointerFrame pointer, double now)
     {
         if (!HistoryOpen) return;
-        history.Process(pointer, new HistoryLayout(Screen.width, Screen.height, settings.Scale), value =>
+        var layout = new HistoryLayout(Screen.width, Screen.height, settings.Scale);
+        history.Process(pointer, layout, value =>
         {
             GUIUtility.systemCopyBuffer = value;
             copiedUntil = now + 2;
         });
+        HistoryHit target = HistoryHit.None;
+        if (history.Confirmation == HistoryConfirmation.None)
+        {
+            if (layout.ClearHistory.Contains(history.PointerX, history.PointerY)) target = HistoryHit.ClearHistory;
+            else if (layout.ClearSuppression.Contains(history.PointerX, history.PointerY)) target = HistoryHit.ClearSuppression;
+        }
+        if (target != tooltipTarget) { tooltipTarget = target; tooltipSince = now; }
     }
-    internal void CancelPointer() => history.CancelPointer();
+    internal void CancelPointer() { history.CancelPointer(); tooltipTarget = HistoryHit.None; }
+    internal void Escape() { history.Escape(); tooltipTarget = HistoryHit.None; }
 
     internal void Draw(double now, bool ready)
     {
@@ -61,7 +71,12 @@ internal sealed class OverlayView : IDisposable
                     top += 118;
                 }
             }
-            if (HistoryOpen) History(layout, now, ready);
+            if (HistoryOpen)
+            {
+                History(layout, now, ready);
+                if (history.Confirmation != HistoryConfirmation.None) DrawConfirmation(layout);
+                else DrawTooltip(layout, now);
+            }
         }
         finally { GUI.matrix = matrix; GUI.depth = depth; GUI.color = color; }
     }
@@ -97,12 +112,13 @@ internal sealed class OverlayView : IDisposable
         DrawButton(layout.Close, words.T("閉じる", "Close"), HistoryHit.Close);
         string status = ready ? journal.Items.Count + words.T("件の履歴", " history groups") : words.T("起動中のログを収集中。メニュー表示後に取り込みます。", "Collecting startup logs. Recovery completes after the main menu is shown.");
         if (journal.Evicted != 0) status += words.T(" ／ 古い履歴を", " / Old groups removed: ") + journal.Evicted + words.T("件削除", "");
-        GUI.Label(new Rect(rect.x + 16, rect.y + 46, rect.width - 32, 38), status, small!);
-        GUI.Label(Rect(layout.PopupHeading), words.T("ポップアップ通知（チェックを外しても履歴には記録します）", "Popup notifications (unchecked levels are still recorded in history)"), popupHeading!);
+        GUI.Label(Rect(layout.Status), status, small!);
+        DrawButton(layout.ClearHistory, words.T("履歴をクリア", "Clear history"), HistoryHit.ClearHistory, journal.Items.Count != 0);
+        GUI.Label(Rect(layout.PopupHeading), words.T("ポップアップ通知（チェックを外しても履歴には記録します）", "Popup notifications (all levels stay in history)"), popupHeading!);
         DrawLevelToggle(layout.NotifyWarning, Severity.Warning, HistoryHit.NotifyWarning);
         DrawLevelToggle(layout.NotifyError, Severity.Error, HistoryHit.NotifyError);
         DrawLevelToggle(layout.NotifyFatal, Severity.Fatal, HistoryHit.NotifyFatal);
-        DrawButton(layout.ClearSuppression, words.T("通知しない設定をすべて解除", "Reset all muted notifications") + " (" + rules.Count + ")", HistoryHit.ClearSuppression, rules.Count != 0);
+        DrawButton(layout.ClearSuppression, words.T("個別ログの通知抑止をすべて解除", "Reset all individual message mutes") + " (" + rules.Count + ")", HistoryHit.ClearSuppression, rules.Count != 0);
         AlertItem? selected = history.Selected;
         history.ClampScroll(layout);
         GUI.BeginGroup(Rect(layout.List));
@@ -124,7 +140,7 @@ internal sealed class OverlayView : IDisposable
         finally { GUI.EndGroup(); }
         DrawScrollbar(layout.ListTrack, journal.Items.Count * HistoryLayout.RowStep, history.ListScroll, HistoryHit.ListScroll);
         if (selected == null)
-        { GUI.Label(Rect(layout.Detail), words.T("警告・エラーはありません。", "No warnings or errors."), text!); return; }
+        { GUI.Label(Rect(layout.Detail), words.T("履歴はありません。", "No history entries."), text!); return; }
         GUI.Label(Rect(layout.Heading), selected.Record.Level + "  ×" + selected.Count + "\n" + selected.Record.Source, text!);
         DrawButton(layout.Copy, now < copiedUntil ? words.T("コピー済", "Copied") : words.T("コピー", "Copy"), HistoryHit.Copy);
         bool suppressed = rules.IsIndividuallySuppressed(selected.Record);
@@ -138,6 +154,42 @@ internal sealed class OverlayView : IDisposable
         try { GUI.Label(new Rect(0, -history.DetailScroll, layout.Detail.Width - 24, contentHeight), selected.Record.Message, detail); }
         finally { GUI.EndGroup(); }
         DrawScrollbar(layout.DetailTrack, history.DetailContentHeight, history.DetailScroll, HistoryHit.DetailScroll);
+    }
+
+    private void DrawConfirmation(HistoryLayout layout)
+    {
+        bool clearHistory = history.Confirmation == HistoryConfirmation.ClearHistory;
+        Fill(Rect(layout.Window), new Color(0, 0, 0, 0.65f));
+        Fill(Rect(layout.Confirmation), new Color(0.035f, 0.045f, 0.06f, 1));
+        GUI.Box(Rect(layout.Confirmation), GUIContent.none);
+        GUI.Label(Rect(layout.ConfirmationTitle), clearHistory
+            ? words.T("履歴をクリア", "Clear history")
+            : words.T("通知抑止の一括解除", "Reset individual mutes"), title!);
+        string message = clearHistory
+            ? words.T("この画面の履歴をすべて消去しますか？\nログファイルや通知設定は変更しません。", "Clear all history entries in this window?\nLog files and notification settings are unchanged.")
+            : words.T("個別ログの通知抑止を ", "Reset all ") + history.ConfirmationCount
+                + words.T(" 件すべて解除しますか？", " individual message mute settings?");
+        GUI.Label(Rect(layout.ConfirmationBody), message, text!);
+        DrawButton(layout.Cancel, words.T("キャンセル", "Cancel"), HistoryHit.Cancel);
+        DrawButton(layout.Confirm, clearHistory ? words.T("クリアする", "Clear history") : words.T("解除する", "Reset mutes"), HistoryHit.Confirm, history.ConfirmationCount != 0);
+    }
+
+    private void DrawTooltip(HistoryLayout layout, double now)
+    {
+        if (tooltipTarget == HistoryHit.None || now - tooltipSince < 0.5) return;
+        string message = tooltipTarget == HistoryHit.ClearHistory
+            ? words.T("この画面の履歴を消去します。\nログファイルや通知設定は変更しません。", "Clears this window's history.\nLog files and notification settings are unchanged.")
+            : words.T("個別ログの通知抑止をすべて解除します。\nWarning／Error／Fatalの選択は変更しません。", "Resets individual message mute settings.\nWarning, Error, and Fatal selections are unchanged.");
+        float width = Math.Min(430, layout.Window.Width - 24);
+        float height = small!.CalcHeight(new GUIContent(message), width - 24) + 16;
+        float x = Math.Max(layout.Window.X + 8, Math.Min(history.PointerX + 16, layout.Window.Right - width - 8));
+        float y = history.PointerY + 20;
+        if (y + height > layout.Window.Bottom - 8) y = history.PointerY - height - 8;
+        y = Math.Max(layout.Window.Y + 8, y);
+        var rect = new Rect(x, y, width, height);
+        Fill(rect, new Color(0.02f, 0.025f, 0.04f, 0.99f));
+        GUI.Box(rect, GUIContent.none);
+        GUI.Label(new Rect(x + 12, y + 8, width - 24, height - 16), message, small);
     }
 
     private void DrawLevelToggle(UiRect rect, Severity level, HistoryHit kind)

@@ -44,7 +44,7 @@ public sealed class AlertHost : MonoBehaviour
             if (keyboard != null)
             {
                 if (keyboard[settings.HistoryKey].wasPressedThisFrame) view.HistoryOpen = !view.HistoryOpen;
-                if (keyboard.escapeKey.wasPressedThisFrame) view.HistoryOpen = false;
+                if (keyboard.escapeKey.wasPressedThisFrame) view.Escape();
             }
             Mouse? mouse = Mouse.current;
             if (mouse != null && Application.isFocused)
