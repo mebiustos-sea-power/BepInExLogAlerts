@@ -5,7 +5,7 @@ An Anchor Chain mod for Sea Power that displays BepInEx Warning / Error / Fatal 
 - Display name: BepInEx Log Alerts
 - Mod ID: `mebiustos.bepinexlogalerts`
 - DLL: `BepInExLogAlerts.dll`
-- Version: 0.1.5
+- Version: 0.1.6
 - Requirements: Sea Power, BepInEx 5.4.x, Anchor Chain
 
 ## How it works
@@ -93,7 +93,7 @@ Use the Windows .NET 10 SDK. No NuGet package download is required. Create `Dire
 .\build.ps1 -Test
 ```
 
-Omit `-Test` to build and package only. Outputs are `dist/BepInExLogAlerts`, `dist/BepInExLogAlerts-v0.1.5.zip`, and `dist/SHA256SUMS.txt`. Only an explicit `-InstallLocal` installs files into StreamingAssets, after checking that the game is stopped.
+Omit `-Test` to build and package only. Outputs are `dist/BepInExLogAlerts`, `dist/BepInExLogAlerts-v0.1.6.zip`, and `dist/SHA256SUMS.txt`. Only an explicit `-InstallLocal` installs files into StreamingAssets, after checking that the game is stopped.
 
 Verification covers log parsing, startup/live overlap reconciliation, repeated messages and capacity limits, notification timing while rendering is stalled, and integration with actual BepInEx using Sea Power's bundled Mono runtime. Mono checks run in a separate process without launching the game; temporary logs are created and removed outside the game's log directory.
 
@@ -120,6 +120,10 @@ Added independent Warning, Error, and Fatal checkboxes to the history. Checked l
 ## Changes in 0.1.5
 
 Restored "Reset all muted notifications" to clearing individual message mute settings only, preserving the Warning, Error, and Fatal selections. The button count and enabled state now depend only on individual mute settings. The popup heading and its note share one line, leaving more vertical space for history and details. Settings file names, keys, and formats are unchanged; no manual configuration changes are required.
+
+## Changes in 0.1.6
+
+Popup headings now use the same font size as the message body, with bold text and a subtle separator line. The startup summary heading is shortened to "Startup logs". Notification dimensions and the history window title retain their existing appearance.
 
 ## Source and releases
 

@@ -12,7 +12,7 @@ internal sealed class OverlayView : IDisposable
     private readonly Toasts toasts;
     private readonly HistoryInteraction history;
     private readonly NotificationRules rules;
-    private GUIStyle? title, text, small, row, detail, button, toggle, popupHeading;
+    private GUIStyle? title, text, small, row, detail, button, toggle, popupHeading, toastHeading;
     private Font? font;
     private double copiedUntil;
     internal bool HistoryOpen { get => history.Open; set => history.Open = value; }
@@ -73,7 +73,7 @@ internal sealed class OverlayView : IDisposable
         string heading, body;
         if (toast.StartupSummary)
         {
-            heading = words.T("起動中のログ通知", "Startup log alerts");
+            heading = words.T("起動中のログ", "Startup logs");
             body = words.T("警告 ", "Warnings: ") + toast.Warnings + words.T("件 ・ エラー ", "  |  Errors: ") + toast.Errors + words.T("件", "");
         }
         else
@@ -82,7 +82,8 @@ internal sealed class OverlayView : IDisposable
             heading = record.Level + "  |  " + record.Source + (toast.Count > 1 ? "  ×" + toast.Count : "");
             body = record.Summary();
         }
-        GUI.Label(new Rect(rect.x + 16, rect.y + 8, rect.width - 30, 26), heading, title!);
+        GUI.Label(new Rect(rect.x + 16, rect.y + 8, rect.width - 30, 26), heading, toastHeading!);
+        Fill(new Rect(rect.x + 16, rect.y + 34, rect.width - 32, 1), new Color(0.45f, 0.48f, 0.52f, 0.45f));
         GUI.Label(new Rect(rect.x + 16, rect.y + 37, rect.width - 30, 42), body, text!);
         GUI.Label(new Rect(rect.x + 16, rect.y + 84, rect.width - 30, 22), settings.HistoryKey + words.T("：履歴・詳細", ": history / details"), small!);
     }
@@ -175,6 +176,7 @@ internal sealed class OverlayView : IDisposable
         if (font == null) throw new InvalidOperationException("A notification font could not be created.");
         title = Style(GUI.skin.label, 19, FontStyle.Bold);
         text = Style(GUI.skin.label, 16);
+        toastHeading = Style(GUI.skin.label, 16, FontStyle.Bold); toastHeading.wordWrap = false;
         small = Style(GUI.skin.label, 13);
         popupHeading = Style(GUI.skin.label, 16); popupHeading.wordWrap = false;
         row = Style(GUI.skin.button, 13); row.alignment = TextAnchor.UpperLeft;
