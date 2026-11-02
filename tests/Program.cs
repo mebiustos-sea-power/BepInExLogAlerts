@@ -374,6 +374,31 @@ internal static class Program
                 foreach (LogRecord pending in mailbox.Drain(4)) center.Receive(pending, 2);
                 Check(center.Journal.Items.Single().Count == 2 && center.Toasts.Visible.Single().Count == 1, "A newly received event was lost after resuming.");
             });
+            Test("Bulk unmute preserves every popup level combination and only clears individual rules", () =>
+            {
+                var levels = new[] { Severity.Warning, Severity.Error, Severity.Fatal };
+                var records = levels.Select(level => Record("bulk unmute", level: level)).ToArray();
+                for (int mask = 0; mask < 8; mask++)
+                {
+                    var rules = new NotificationRules(new NotificationRuleSet(records.Select(record => record.NotificationId),
+                        (mask & 1) != 0, (mask & 2) != 0, (mask & 4) != 0), _ => { });
+                    var history = new HistoryInteraction(new AlertJournal(20, 10), rules) { Open = true };
+                    var layout = new HistoryLayout(1920, 1080, 1);
+                    Click(history, layout, layout.ClearSuppression, _ => throw new Exception("Bulk unmute copied a log."));
+                    for (int i = 0; i < levels.Length; i++)
+                        Check(rules.IsLevelEnabled(levels[i]) == ((mask & (1 << i)) != 0), "Bulk unmute changed the selected popup levels.");
+                    Check(rules.Count == 0 && records.All(record => !rules.IsIndividuallySuppressed(record)), "Bulk unmute left individual rules behind.");
+                    for (int i = 0; i < levels.Length; i++)
+                    {
+                        var center = new NotificationCenter(20, 10, 6, 10, rules);
+                        center.Receive(records[i], 0);
+                        Check(center.Journal.Items.Count == 1 && center.Toasts.Visible.Count == ((mask & (1 << i)) != 0 ? 1 : 0), "Bulk unmute changed popup eligibility or lost history.");
+                    }
+                    int revision = rules.Revision;
+                    Click(history, layout, layout.ClearSuppression, _ => { });
+                    Check(rules.Revision == revision && history.Hover != HistoryHit.ClearSuppression, "Bulk unmute remained active without individual rules.");
+                }
+            });
             Test("Global Warning suppression keeps history and leaves Error/Fatal and individual rules intact", () =>
             {
                 var rules = Rules();
@@ -422,7 +447,7 @@ internal static class Program
                 center.Receive(a, 2); center.Receive(b, 2);
                 Check(center.Journal.Items.Sum(i => i.Count) == 4 && center.Toasts.Visible.Single().Item!.Record.Message == b.Message && center.Toasts.Visible.Single().Count == 1, "A muted message appeared or old counts entered the resumed popup.");
             });
-            Test("Logs queued while each level is disabled stay silent after reset", () =>
+            Test("Logs queued while each level is disabled stay silent after re-enabling it", () =>
             {
                 foreach (Severity level in new[] { Severity.Warning, Severity.Error, Severity.Fatal })
                 {
@@ -431,10 +456,10 @@ internal static class Program
                     mailbox.SealStartup(() => 0, out _);
                     rules.SetLevelEnabled(level, false);
                     mailbox.Post(level, "Mod", "queued", DateTimeOffset.Now);
-                    rules.Clear();
+                    rules.SetLevelEnabled(level, true);
                     var center = new NotificationCenter(20, 10, 6, 10, rules);
                     foreach (LogRecord record in mailbox.Drain(4)) center.Receive(record, 1);
-                    Check(center.Journal.Items.Count == 1 && center.Toasts.Visible.Count == 0, "Reset replayed an event received while its level was disabled.");
+                    Check(center.Journal.Items.Count == 1 && center.Toasts.Visible.Count == 0, "Re-enabling a level replayed an event received while it was disabled.");
                     mailbox.Post(level, "Mod", "queued", DateTimeOffset.Now);
                     foreach (LogRecord record in mailbox.Drain(4)) center.Receive(record, 2);
                     Check(center.Journal.Items.Single().Count == 2 && center.Toasts.Visible.Single().Count == 1, "A new event failed to resume with a fresh popup count.");
@@ -457,13 +482,13 @@ internal static class Program
                     rules.SetLevelEnabled(Severity.Error, false);
                     rules.SetLevelEnabled(Severity.Fatal, false);
                     rules = new NotificationRules(store.Load(), store.Save);
-                    Check(rules.Count == 5 && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !rules.IsLevelEnabled(level)) && rules.IsIndividuallySuppressed(a) && rules.IsIndividuallySuppressed(b), "Reload lost a level or an individual setting.");
+                    Check(rules.Count == 2 && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !rules.IsLevelEnabled(level)) && rules.IsIndividuallySuppressed(a) && rules.IsIndividuallySuppressed(b), "Reload lost a level or an individual setting.");
                     rules.SetLevelEnabled(Severity.Error, true);
                     rules = new NotificationRules(store.Load(), store.Save);
                     Check(rules.IsLevelEnabled(Severity.Error) && !rules.IsLevelEnabled(Severity.Warning) && !rules.IsLevelEnabled(Severity.Fatal) && rules.IsIndividuallySuppressed(b), "Changing Error modified another level or erased an individual setting.");
                     rules.Clear();
                     rules = new NotificationRules(store.Load(), store.Save);
-                    Check(rules.Count == 0 && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(rules.IsLevelEnabled) && !rules.IsSuppressed(a) && !rules.IsSuppressed(b), "Reset did not persist all enabled levels and cleared individual settings.");
+                    Check(rules.Count == 0 && !rules.IsLevelEnabled(Severity.Warning) && rules.IsLevelEnabled(Severity.Error) && !rules.IsLevelEnabled(Severity.Fatal) && !rules.IsIndividuallySuppressed(a) && !rules.IsIndividuallySuppressed(b) && rules.IsSuppressed(a) && !rules.IsSuppressed(b), "Bulk unmute did not persist the level choices and cleared individual settings.");
                 }
                 finally { Directory.Delete(directory, true); }
             });
@@ -480,7 +505,7 @@ internal static class Program
                 var muted = new NotificationRules(new NotificationRuleSet(new[] { error.NotificationId }, false, false, false), _ => throw new IOException("disk unavailable"));
                 bool resetFailed = false;
                 try { muted.Clear(); } catch (IOException) { resetFailed = true; }
-                Check(resetFailed && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !muted.IsLevelEnabled(level)) && muted.IsIndividuallySuppressed(error) && muted.Count == 4 && muted.Revision == 0, "A failed reset partially cleared the policy.");
+                Check(resetFailed && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !muted.IsLevelEnabled(level)) && muted.IsIndividuallySuppressed(error) && muted.Count == 1 && muted.Revision == 0, "A failed reset partially cleared the policy.");
             });
             Test("Invalid per-level settings and the unsupported development format are not silently reset", () =>
             {
@@ -514,18 +539,18 @@ internal static class Program
                     {
                         Click(history, layout, control.Item2, _ => throw new Exception("A level checkbox copied a log."));
                         disabled++;
-                        Check(!rules.IsLevelEnabled(control.Item1) && rules.Count == disabled && history.Selected == null, "A checkbox toggled another level or required a selected row.");
+                        Check(controls.Select((c, index) => rules.IsLevelEnabled(c.Item1) == (index >= disabled)).All(enabled => enabled) && rules.Count == 0 && history.Selected == null, "A checkbox toggled another level, changed the individual-rule count, or required a selected row.");
                     }
                     history.Open = false; history.Open = true;
                     Check(controls.All(c => !rules.IsLevelEnabled(c.Item1)), "Closing history lost the level choices.");
                     Click(history, layout, layout.ClearSuppression, _ => { });
-                    Check(controls.All(c => rules.IsLevelEnabled(c.Item1)) && rules.Count == 0, "Reset did not enable all three levels with empty history.");
+                    Check(controls.All(c => !rules.IsLevelEnabled(c.Item1)) && rules.Count == 0 && history.Hover != HistoryHit.ClearSuppression, "Bulk unmute changed level choices or remained active without individual rules.");
                     foreach (var control in controls)
                     {
                         float x = control.Item2.X + 20, y = control.Item2.Y + 15;
                         Send(history, layout, x, y, true, false, true, 0, _ => { });
                         Send(history, layout, layout.Detail.X, layout.Detail.Y, false, true, false, 0, _ => { });
-                        Check(rules.IsLevelEnabled(control.Item1), "Releasing outside toggled a level.");
+                        Check(!rules.IsLevelEnabled(control.Item1), "Releasing outside toggled a level.");
                     }
                 }
             });
@@ -545,8 +570,9 @@ internal static class Program
                 Click(history, layout, layout.NotifyWarning, _ => { });
                 Click(history, layout, layout.Suppress, _ => { });
                 Check(!rules.IsIndividuallySuppressed(selected) && rules.IsSuppressed(selected), "Individual unmute incorrectly bypassed the global setting.");
+                Click(history, layout, layout.Suppress, _ => { });
                 Click(history, layout, layout.ClearSuppression, _ => { });
-                Check(rules.IsLevelEnabled(Severity.Warning) && !rules.IsSuppressed(selected), "Combined reset failed from the history UI.");
+                Check(!rules.IsLevelEnabled(Severity.Warning) && rules.IsSuppressed(selected) && !rules.IsIndividuallySuppressed(selected) && rules.Count == 0, "Bulk unmute changed the level choice or retained an individual rule in the history UI.");
             });
             Test("All eight level combinations affect popups independently while retaining history", () =>
             {

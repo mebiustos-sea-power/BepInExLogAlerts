@@ -5,7 +5,7 @@ An Anchor Chain mod for Sea Power that displays BepInEx Warning / Error / Fatal 
 - Display name: BepInEx Log Alerts
 - Mod ID: `mebiustos.bepinexlogalerts`
 - DLL: `BepInExLogAlerts.dll`
-- Version: 0.1.4
+- Version: 0.1.5
 - Requirements: Sea Power, BepInEx 5.4.x, Anchor Chain
 
 ## How it works
@@ -30,13 +30,13 @@ At the top of the history, check Warning, Error, and Fatal to choose which level
 
 Changes take effect immediately and persist across game restarts. Disabling a level removes its visible popups and its contributions to startup summaries. Re-enabling it applies to future occurrences without replaying past messages or restoring removed counts. Individual mute settings are preserved and still apply to enabled levels.
 
-The per-message checkbox controls only the selected message's individual setting. "Reset all muted notifications" checks all three levels and clears every individual mute setting, including when no history entries are present.
+The per-message checkbox controls only the selected message's individual setting. "Reset all muted notifications" clears every individual mute setting while keeping the Warning, Error, and Fatal selections unchanged, including when no history entries are present.
 
 ## Muting individual notifications
 
 Select an entry in the history and check "Do not notify me of this log again" to stop its popups. Uncheck it to resume notifications for that entry. Muted messages are still collected and retained in history, where they are marked "Muted".
 
-Use "Reset all muted notifications" at the top of the history to clear every mute setting, including disabled notification levels and settings for messages absent from the current session's history. Mute settings persist across game restarts. BepInEx's own warnings and errors remain eligible by default.
+Use "Reset all muted notifications" at the top of the history to clear individual mute settings, including settings for messages absent from the current session's history. Level selections are unchanged. The button's count includes only individual mute settings, and the button is disabled when none remain. Mute settings persist across game restarts. BepInEx's own warnings and errors remain eligible by default.
 
 A mute setting matches the combination of log level, source, and stored message body. It is independent of startup/live status, timestamp, and occurrence count. Changes to numbers or other text in the body make a different message. There are no wildcard or substring exclusions.
 
@@ -93,7 +93,7 @@ Use the Windows .NET 10 SDK. No NuGet package download is required. Create `Dire
 .\build.ps1 -Test
 ```
 
-Omit `-Test` to build and package only. Outputs are `dist/BepInExLogAlerts`, `dist/BepInExLogAlerts-v0.1.4.zip`, and `dist/SHA256SUMS.txt`. Only an explicit `-InstallLocal` installs files into StreamingAssets, after checking that the game is stopped.
+Omit `-Test` to build and package only. Outputs are `dist/BepInExLogAlerts`, `dist/BepInExLogAlerts-v0.1.5.zip`, and `dist/SHA256SUMS.txt`. Only an explicit `-InstallLocal` installs files into StreamingAssets, after checking that the game is stopped.
 
 Verification covers log parsing, startup/live overlap reconciliation, repeated messages and capacity limits, notification timing while rendering is stalled, and integration with actual BepInEx using Sea Power's bundled Mono runtime. Mono checks run in a separate process without launching the game; temporary logs are created and removed outside the game's log directory.
 
@@ -116,6 +116,10 @@ All history rows now show severity stripes using the same color definition as po
 ## Changes in 0.1.4
 
 Added independent Warning, Error, and Fatal checkboxes to the history. Checked levels produce popups; unchecked levels remain available in history. Choices apply to live notifications and startup summaries and persist alongside individual mute settings. Reset checks all three levels and clears individual rules. Individual settings from released v0.1.3 are preserved.
+
+## Changes in 0.1.5
+
+Restored "Reset all muted notifications" to clearing individual message mute settings only, preserving the Warning, Error, and Fatal selections. The button count and enabled state now depend only on individual mute settings. Settings file names, keys, and formats are unchanged; no manual configuration changes are required.
 
 ## Source and releases
 

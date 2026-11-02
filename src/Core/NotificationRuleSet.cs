@@ -12,7 +12,7 @@ internal sealed class NotificationRuleSet
     internal bool ErrorEnabled { get; }
     internal bool FatalEnabled { get; }
     internal IReadOnlyCollection<string> MessageIds { get; }
-    internal int Count => ids.Count + (WarningEnabled ? 0 : 1) + (ErrorEnabled ? 0 : 1) + (FatalEnabled ? 0 : 1);
+    internal int Count => ids.Count;
     internal NotificationRuleSet(IEnumerable<string> messageIds, bool warningEnabled = true, bool errorEnabled = true, bool fatalEnabled = true)
     {
         ids = new HashSet<string>(messageIds, StringComparer.Ordinal);

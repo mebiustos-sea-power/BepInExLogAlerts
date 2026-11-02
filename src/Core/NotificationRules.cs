@@ -39,7 +39,9 @@ internal sealed class NotificationRules
     }
     internal void Clear()
     {
-        if (Count != 0) Commit(new NotificationRuleSet(Array.Empty<string>()));
+        NotificationRuleSet snapshot = Volatile.Read(ref current);
+        if (snapshot.Count != 0)
+            Commit(new NotificationRuleSet(Array.Empty<string>(), snapshot.WarningEnabled, snapshot.ErrorEnabled, snapshot.FatalEnabled));
     }
     private void Commit(NotificationRuleSet next)
     {

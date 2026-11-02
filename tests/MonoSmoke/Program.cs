@@ -70,18 +70,19 @@ internal static class Program
             reloaded.SetLevelEnabled(Severity.Error, false);
             reloaded.SetLevelEnabled(Severity.Fatal, false);
             reloaded = new NotificationRules(store.Load(), store.Save);
-            Check(new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !reloaded.IsLevelEnabled(level)) && reloaded.Count == 5 && reloaded.IsIndividuallySuppressed(a) && reloaded.IsIndividuallySuppressed(b), "Mono did not persist all three level choices during the released-format upgrade.");
+            Check(new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !reloaded.IsLevelEnabled(level)) && reloaded.Count == 2 && reloaded.IsIndividuallySuppressed(a) && reloaded.IsIndividuallySuppressed(b), "Mono did not persist all three level choices during the released-format upgrade.");
             byte[] saved = File.ReadAllBytes(rulePath);
             using (var held = new FileStream(rulePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 bool failed = false;
                 try { reloaded.Clear(); } catch (IOException) { failed = true; }
-                Check(failed && reloaded.Count == 5 && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !reloaded.IsLevelEnabled(level)) && File.ReadAllBytes(rulePath).SequenceEqual(saved), "Failed replacement lost the previous settings.");
+                Check(failed && reloaded.Count == 2 && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !reloaded.IsLevelEnabled(level)) && File.ReadAllBytes(rulePath).SequenceEqual(saved), "Failed replacement lost the previous settings.");
             }
             Check(Directory.GetFiles(root, "*.tmp").Length == 0, "Failed persistence left an uncommitted temporary file.");
             reloaded.Clear();
-            Check(store.Load().Count == 0 && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => store.Load().IsLevelEnabled(level)), "Mono did not persist the reset after releasing the file lock.");
-            Console.WriteLine("PASS Released settings, independent levels, atomic replacement, failed-save rollback, and combined reset on game Mono");
+            reloaded = new NotificationRules(store.Load(), store.Save);
+            Check(reloaded.Count == 0 && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !reloaded.IsLevelEnabled(level)) && !reloaded.IsIndividuallySuppressed(a) && !reloaded.IsIndividuallySuppressed(b), "Mono did not preserve level choices while persisting bulk unmute after releasing the file lock.");
+            Console.WriteLine("PASS Released settings, independent levels, atomic replacement, failed-save rollback, and bulk unmute preserving levels on game Mono");
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

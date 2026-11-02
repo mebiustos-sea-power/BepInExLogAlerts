@@ -53,3 +53,14 @@ Game launch, installation, actual screen/input validation, and Workshop publicat
 - Backward reading is limited to the individual-setting format used by released v0.1.3. Its IDs are preserved and all levels default to enabled. The unreleased Warning-only development format has no migration path and is rejected explicitly without overwriting it.
 - Package/ZIP contain exactly DLL, _info.ini and the English README. Archive CRC, source/build byte equality and SHA256SUMS.txt were verified. DLL SHA256: 1fdc6f7f0085bdabd435b2dc77a4c9b6d849a5f6dca05850d2bba1087d20d7a0. ZIP SHA256: d59057a78e14c495b4520a89dc4bde2d0dde21ea88cf5abca75223f98b148d85.
 - No game launch or live visual validation was performed. The verified three-file package was subsequently deployed locally at the user's request. GitHub publication uses the same tested DLL and ZIP.
+
+
+## 0.1.5 — preserve popup levels when clearing individual mutes (2026-11-03)
+
+- Added a regression covering the bulk-unmute button for all eight Warning/Error/Fatal combinations, including future popup eligibility, retained history, and the inactive button with no individual rules. Before the fix, it failed with "Bulk unmute changed the selected popup levels."
+- Updated existing persistence, failed-save, and multi-scale UI checks to the restored individual-only bulk-unmute contract. Queued level-filtered events are now tested with an explicit level re-enable rather than an unrelated bulk reset.
+- Command: `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File build.ps1 -Test`. All Release builds passed with 0 warnings/errors; all 43 behavior checks and all five game-bundled Mono integration checks passed.
+- Disk persistence checks cover the released version-1 settings upgrade, current version-2 settings, mixed enabled/disabled levels after bulk unmute and reload, atomic replacement, and locked-file failure preserving previous settings.
+- Product changes are limited to individual-only rule counting, clearing individual rules while retaining the immutable level snapshot, and the version bump. Button count, enabled state, and pointer hit testing share that count. NotificationRuleStore, settings paths/keys/formats, existing UI text, logging, startup recovery, and game integration are unchanged. No code comments were changed.
+- ZIP CRC and the exact three runtime files were verified against the build, README, and metadata; SHA256SUMS.txt matches the ZIP. DLL SHA256: 9ece3dd71d3d0f713ebb014db810f44094cbcb050a5904cc0920b01da5dd9f53. ZIP SHA256: 85547c1cfd4db965fdc8e90e201af7343cb08bfbbe33b1d19503a541eda768f2. The existing v0.1.4 ZIP is unchanged.
+- No live game launch, visual validation, game deployment, local preference edits, or Steam Workshop update was performed during this patch.
