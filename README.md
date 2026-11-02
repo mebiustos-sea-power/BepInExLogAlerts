@@ -22,6 +22,8 @@ Popup notifications do not capture clicks or focus. Nothing is drawn when there 
 
 Press `F8` to toggle the history. `Escape` or the Close button also closes it. Select a log to view its message and stack trace, or use Copy to copy its source, level, and message. Each row has the same severity stripe as its popup: yellow-orange for Warning and red for Error/Fatal. The selected row has a brighter background. Both panes support the mouse wheel and draggable scrollbars.
 
+While history or its confirmation dialog is open, the mod blocks input through Noesis's shared UI input paths to prevent clicks from activating buttons or links behind it. The closing input and its release are also blocked before normal UI input resumes. Passive popup notifications do not block input. This protection covers Noesis UI; camera controls and other game input outside Noesis are outside its scope.
+
 History remains available after notifications disappear. It retains up to 200 groups by default and reports how many older groups have been removed when the limit is reached. Recovered file entries are labeled "Startup" because the log file does not provide timestamps from which to recover their original times. The source is the name that emitted the log; it does not establish which mod caused the underlying problem.
 
 ## Clearing history and confirming bulk actions

@@ -732,6 +732,71 @@ internal static class Program
                 center.Receive(error, 4); center.Receive(fatal, 4);
                 Check(center.Toasts.Visible.Count == 2 && center.Toasts.Visible.All(t => t.Count == 1), "New Error/Fatal occurrences did not resume with fresh popup counts.");
             });
+            Test("An open history or confirmation blocks input, and passive notifications do not", () =>
+            {
+                var gate = new ModalInputGate();
+                for (int frame = 1; frame < 4; frame++)
+                {
+                    gate.Observe(frame, false, frame == 2);
+                    Check(!gate.Blocked, "Ordinary game input was blocked with history closed.");
+                }
+                var history = new HistoryInteraction(HistoryJournal(1), Rules()) { Open = true };
+                gate.Observe(4, history.Open, false);
+                Click(history, new HistoryLayout(1920, 1080, 1), new HistoryLayout(1920, 1080, 1).ClearHistory, _ => { });
+                gate.Observe(5, history.Open, false);
+                Check(gate.Blocked && history.Confirmation == HistoryConfirmation.ClearHistory, "History confirmation did not retain the input lock.");
+                history.Escape(); gate.Observe(6, history.Open, false);
+                Check(gate.Blocked && history.Confirmation == HistoryConfirmation.None, "Canceling confirmation unlocked the underlying UI while history remained open.");
+            });
+            Test("The Close click and every later consumer in its release frame remain blocked", () =>
+            {
+                var gate = new ModalInputGate();
+                var history = new HistoryInteraction(HistoryJournal(1), Rules()) { Open = true };
+                var layout = new HistoryLayout(1920, 1080, 1);
+                gate.Observe(10, history.Open, true);
+                Send(history, layout, layout.Close.X + 5, layout.Close.Y + 5, true, false, true, 0, _ => { });
+                gate.Observe(11, history.Open, false);
+                Send(history, layout, layout.Close.X + 5, layout.Close.Y + 5, false, true, false, 0, _ => { });
+                gate.Observe(11, history.Open, false);
+                Check(!history.Open && gate.Blocked, "The Close release reached the underlying UI.");
+                gate.Observe(11, false, false);
+                Check(gate.Blocked, "A later input consumer unlocked the release frame.");
+                gate.Observe(12, false, false);
+                Check(!gate.Blocked, "Normal UI input did not resume after the Close release.");
+            });
+            Test("Keyboard closure waits for all held input and its release frame", () =>
+            {
+                var gate = new ModalInputGate();
+                gate.Observe(1, true, false);
+                gate.Observe(2, false, true);
+                gate.Observe(3, false, true);
+                Check(gate.Blocked, "A held closing key escaped to the underlying UI.");
+                gate.Observe(4, false, false);
+                gate.Observe(4, false, false);
+                Check(gate.Blocked, "The closing key's release was forwarded.");
+                gate.Observe(5, false, false);
+                Check(!gate.Blocked, "The keyboard close left a permanent lock.");
+            });
+            Test("Reopening and additional held input extend the lock without leaking a release", () =>
+            {
+                var gate = new ModalInputGate();
+                gate.Observe(1, true, false); gate.Observe(2, false, false);
+                gate.Observe(3, true, false);
+                Check(gate.Blocked, "Reopening during release wait unlocked input.");
+                gate.Observe(4, false, false); gate.Observe(4, false, true);
+                gate.Observe(5, false, false);
+                Check(gate.Blocked, "Newly held input bypassed the release wait.");
+                gate.Observe(6, false, false);
+                Check(!gate.Blocked, "Input did not recover after reopening and releasing.");
+            });
+            Test("A fresh game click after the closing release is not swallowed", () =>
+            {
+                var gate = new ModalInputGate();
+                gate.Observe(10, true, false);
+                gate.Observe(11, false, false);
+                gate.Observe(12, false, true);
+                Check(!gate.Blocked, "A fresh click after the completed closing release was swallowed.");
+            });
             Console.WriteLine("Passed " + count + " behavior checks."); return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

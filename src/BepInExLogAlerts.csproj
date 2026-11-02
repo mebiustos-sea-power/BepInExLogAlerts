@@ -6,6 +6,8 @@
   <ItemGroup>
     <Reference Include="AnchorChain" HintPath="$(AnchorChainDir)\AnchorChain.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="BepInEx" HintPath="$(SeaPowerDir)\BepInEx\core\BepInEx.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="0Harmony" HintPath="$(SeaPowerDir)\BepInEx\core\0Harmony.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="Noesis.NoesisGUI" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Noesis.NoesisGUI.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UnityEngine.CoreModule.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="UnityEngine.IMGUIModule" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UnityEngine.IMGUIModule.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UnityEngine.TextRenderingModule.dll" Private="false" ExternallyResolved="true" />

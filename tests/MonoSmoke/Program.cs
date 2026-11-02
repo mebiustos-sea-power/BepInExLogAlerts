@@ -110,6 +110,7 @@ internal static class Program
             reloaded = new NotificationRules(store.Load(), store.Save);
             Check(reloaded.Count == 0 && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !reloaded.IsLevelEnabled(level)) && !reloaded.IsIndividuallySuppressed(a) && !reloaded.IsIndividuallySuppressed(b), "Mono did not preserve level choices while persisting bulk unmute after releasing the file lock.");
             Console.WriteLine("PASS Confirmed history clear preserves log/settings files; reception, released settings, failed-save rollback and confirmed bulk unmute work on game Mono");
+            NoesisInputChecks.Run();
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

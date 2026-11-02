@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using BepInExLogAlerts.Core;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 
 namespace BepInExLogAlerts;
 
@@ -19,6 +20,8 @@ public sealed class AlertHost : MonoBehaviour
     private NotificationCenter? notifications;
     private UiText? words;
     private OverlayView? view;
+    private NoesisInputBlocker? inputBlocker;
+    private readonly ModalInputGate inputGate = new ModalInputGate();
     private Task<List<LogRecord>>? import;
     private List<LogRecord> startupCaptured = new List<LogRecord>();
     private bool menuDetected, menuRepainted, importStarted, ready, closed;
@@ -32,6 +35,11 @@ public sealed class AlertHost : MonoBehaviour
         words = new UiText(game, settings.Language);
         notifications = new NotificationCenter(settings.HistoryLimit, settings.RepeatSeconds, settings.WarningSeconds, settings.ErrorSeconds, rules);
         view = new OverlayView(settings, words, notifications);
+        inputBlocker = new NoesisInputBlocker(BlockNoesisInput, error =>
+        {
+            Plugin.Log.LogError("Noesis UI input blocking failed; the overlay was closed: " + error);
+            Close();
+        });
     }
 
     private void Update()
@@ -40,29 +48,7 @@ public sealed class AlertHost : MonoBehaviour
         try
         {
             double now = Time.realtimeSinceStartupAsDouble;
-            Keyboard? keyboard = Keyboard.current;
-            if (keyboard != null)
-            {
-                if (keyboard[settings.HistoryKey].wasPressedThisFrame) view.HistoryOpen = !view.HistoryOpen;
-                if (keyboard.escapeKey.wasPressedThisFrame) view.Escape();
-            }
-            Mouse? mouse = Mouse.current;
-            if (mouse != null && Application.isFocused)
-            {
-                Vector2 position = mouse.position.ReadValue();
-                try
-                {
-                    view.ProcessPointer(new PointerFrame(position.x, position.y,
-                        mouse.leftButton.wasPressedThisFrame, mouse.leftButton.wasReleasedThisFrame,
-                        mouse.leftButton.isPressed, mouse.scroll.ReadValue().y), now);
-                }
-                catch (Exception error)
-                {
-                    view.CancelPointer();
-                    Problem("History action failed; notification settings were not changed if saving failed", error);
-                }
-            }
-            else view.CancelPointer();
+            ReadOverlayInput();
             if (now >= nextSample)
             {
                 nextSample = now + 0.25;
@@ -97,6 +83,64 @@ public sealed class AlertHost : MonoBehaviour
             notifications!.Tick(now);
         }
         catch (Exception error) { Plugin.Log.LogError("Log alert monitoring stopped: " + error); Close(); }
+    }
+
+    // Input is sampled in Update; Noesis only observes the resulting modal state.
+    private bool BlockNoesisInput() => !closed && inputGate.Blocked;
+
+    private void ReadOverlayInput()
+    {
+        if (closed || settings == null || view == null) return;
+        int frame = Time.frameCount;
+        bool wasOpen = view.HistoryOpen;
+        bool focused = Application.isFocused;
+        Keyboard? keyboard = Keyboard.current;
+        if (keyboard != null)
+        {
+            if (keyboard[settings.HistoryKey].wasPressedThisFrame) view.HistoryOpen = !view.HistoryOpen;
+            wasOpen |= view.HistoryOpen;
+            if (keyboard.escapeKey.wasPressedThisFrame) view.Escape();
+        }
+        ObserveInputGate(frame, wasOpen || view.HistoryOpen, focused);
+        Mouse? mouse = Mouse.current;
+        if (mouse != null && focused)
+        {
+            Vector2 position = mouse.position.ReadValue();
+            try
+            {
+                view.ProcessPointer(new PointerFrame(position.x, position.y,
+                    mouse.leftButton.wasPressedThisFrame, mouse.leftButton.wasReleasedThisFrame,
+                    mouse.leftButton.isPressed, mouse.scroll.ReadValue().y), Time.realtimeSinceStartupAsDouble);
+            }
+            catch (Exception error)
+            {
+                view.CancelPointer();
+                Problem("History action failed; notification settings were not changed if saving failed", error);
+            }
+        }
+        else view.CancelPointer();
+        ObserveInputGate(frame, view.HistoryOpen, focused);
+    }
+
+    private void ObserveInputGate(int frame, bool open, bool focused) =>
+        inputGate.Observe(frame, open, !open && inputGate.Blocked && focused && AnyInputHeld());
+
+    private static bool AnyInputHeld()
+    {
+        foreach (var device in InputSystem.devices)
+        {
+            if (device is Keyboard keyboard && keyboard.anyKey.isPressed) return true;
+            if (device is Mouse mouse && (mouse.leftButton.isPressed || mouse.rightButton.isPressed ||
+                mouse.middleButton.isPressed || mouse.backButton.isPressed || mouse.forwardButton.isPressed)) return true;
+            if (device is Touchscreen touch)
+                foreach (var contact in touch.touches) if (contact.press.isPressed) return true;
+            if (device is Gamepad pad)
+            {
+                if (pad.leftStick.ReadValue().sqrMagnitude > 0.04f || pad.rightStick.ReadValue().sqrMagnitude > 0.04f) return true;
+                foreach (var control in pad.allControls) if (control is ButtonControl button && button.isPressed) return true;
+            }
+        }
+        return false;
     }
 
     private void BeginImport()
@@ -154,11 +198,14 @@ public sealed class AlertHost : MonoBehaviour
         catch (Exception error) { Plugin.Log.LogError("Log alert display stopped: " + error); Close(); }
     }
     private void OnApplicationQuit() => Close();
+    private void OnDisable() => Close();
     private void OnDestroy() => Close();
     private void Close()
     {
         if (closed) return;
         closed = true;
+        try { inputBlocker?.Dispose(); }
+        catch (Exception error) { Plugin.Log.LogError("Could not remove the Noesis input hooks: " + error); }
         if (listener != null) { listener.Dispose(); BepInEx.Logging.Logger.Listeners.Remove(listener); }
         view?.Dispose();
         enabled = false;
