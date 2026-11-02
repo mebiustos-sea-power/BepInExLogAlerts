@@ -24,7 +24,7 @@ internal sealed class HistoryLayout
 {
     internal const float RowStep = 76, RowHeight = 72;
     internal readonly float Scale, PixelHeight;
-    internal readonly UiRect Window, Close, List, Copy, Heading, Detail, ListTrack, DetailTrack, Suppress, ClearSuppression;
+    internal readonly UiRect Window, Close, List, Copy, Heading, Detail, ListTrack, DetailTrack, Suppress, ClearSuppression, PopupHeading, PopupHint, NotifyWarning, NotifyError, NotifyFatal;
     internal HistoryLayout(float pixelWidth, float pixelHeight, float configuredScale)
     {
         PixelHeight = pixelHeight;
@@ -33,8 +33,14 @@ internal sealed class HistoryLayout
         float width = Math.Min(1040, canvasWidth - 24), height = Math.Min(760, canvasHeight - 24);
         Window = new UiRect((canvasWidth - width) / 2, (canvasHeight - height) / 2, width, height);
         Close = new UiRect(Window.Right - 88, Window.Y + 12, 72, 28);
-        ClearSuppression = new UiRect(Window.X + 16, Window.Y + 84, Math.Min(360, width - 32), 32);
-        List = new UiRect(Window.X + 12, Window.Y + 130, Math.Min(390, width * 0.42f), height - 144);
+        PopupHeading = new UiRect(Window.X + 16, Window.Y + 84, width - 32, 24);
+        float optionWidth = Math.Min(150, (width - 32) / 3);
+        NotifyWarning = new UiRect(Window.X + 16, Window.Y + 110, optionWidth, 28);
+        NotifyError = new UiRect(NotifyWarning.Right, NotifyWarning.Y, optionWidth, 28);
+        NotifyFatal = new UiRect(NotifyError.Right, NotifyWarning.Y, optionWidth, 28);
+        PopupHint = new UiRect(Window.X + 16, Window.Y + 144, width - 32, 22);
+        ClearSuppression = new UiRect(Window.X + 16, Window.Y + 174, Math.Min(360, width - 32), 32);
+        List = new UiRect(Window.X + 12, Window.Y + 220, Math.Min(390, width * 0.42f), height - 234);
         float rightX = List.Right + 14, rightWidth = Window.Right - List.Right - 28;
         Heading = new UiRect(rightX, List.Y, rightWidth - 92, 50);
         Copy = new UiRect(Window.Right - 96, List.Y, 82, 30);
@@ -52,7 +58,7 @@ internal sealed class HistoryLayout
     }
 }
 
-internal enum HistoryHit { None, Close, Copy, Row, ListScroll, DetailScroll, Suppress, ClearSuppression }
+internal enum HistoryHit { None, Close, Copy, Row, ListScroll, DetailScroll, Suppress, ClearSuppression, NotifyWarning, NotifyError, NotifyFatal }
 
 internal sealed class HistoryInteraction
 {
@@ -128,12 +134,17 @@ internal sealed class HistoryInteraction
                 else if (action == HistoryHit.Row && ReferenceEquals(item, hovered))
                 { selected = hovered; DetailScroll = 0; }
                 else if (action == HistoryHit.Suppress && item != null && ReferenceEquals(Selected, item))
-                    rules.SetSuppressed(item.Record, !rules.IsSuppressed(item.Record));
+                    rules.SetSuppressed(item.Record, !rules.IsIndividuallySuppressed(item.Record));
+                else if (action == HistoryHit.NotifyWarning) ToggleLevel(Severity.Warning);
+                else if (action == HistoryHit.NotifyError) ToggleLevel(Severity.Error);
+                else if (action == HistoryHit.NotifyFatal) ToggleLevel(Severity.Fatal);
                 else if (action == HistoryHit.ClearSuppression) rules.Clear();
             }
         }
         else if (!frame.Held && !frame.Pressed) { pressed = HistoryHit.None; pressedItem = null; }
     }
+
+    private void ToggleLevel(Severity level) => rules.SetLevelEnabled(level, !rules.IsLevelEnabled(level));
 
     internal void ClampScroll(HistoryLayout layout)
     {
@@ -144,6 +155,9 @@ internal sealed class HistoryInteraction
     {
         item = null;
         if (layout.Close.Contains(PointerX, PointerY)) return HistoryHit.Close;
+        if (layout.NotifyWarning.Contains(PointerX, PointerY)) return HistoryHit.NotifyWarning;
+        if (layout.NotifyError.Contains(PointerX, PointerY)) return HistoryHit.NotifyError;
+        if (layout.NotifyFatal.Contains(PointerX, PointerY)) return HistoryHit.NotifyFatal;
         if (Selected != null && layout.Copy.Contains(PointerX, PointerY)) return HistoryHit.Copy;
         if (Selected != null && layout.Suppress.Contains(PointerX, PointerY)) return HistoryHit.Suppress;
         if (rules.Count != 0 && layout.ClearSuppression.Contains(PointerX, PointerY)) return HistoryHit.ClearSuppression;

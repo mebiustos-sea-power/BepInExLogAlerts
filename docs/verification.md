@@ -42,3 +42,14 @@ Game launch, installation, actual screen/input validation, and Workshop publicat
 - Translated the repository README, versioned release notes, and GitHub download ZIP's README into English. This correction changes documentation only; no new runtime version is introduced.
 - Repacked the existing v0.1.3 ZIP by replacing only README.md, then regenerated SHA256SUMS.txt. Verified the three archive entries, the English README, and unchanged DLL and _info.ini bytes against the previous archive.
 - Existing runtime tests were not repeated for this documentation-only correction. Workshop files, the local three-file package used for Workshop, and the game installation were not changed. The published v0.1.3 source tag remains unchanged.
+
+
+## 0.1.4 — independent popup notification levels (2026-11-03)
+
+- Command: `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File build.ps1 -Test`. All Release builds passed with 0 warnings/errors.
+- All 42 behavioral checks passed. The original 30 regressions remain covered. Added coverage includes level filtering with retained history, existing-card removal, future-only resume and queued muted events, independent per-message settings, persistence, failed-save rollback, invalid settings, three positive checkbox controls and reset with empty history at multiple scales, all eight level combinations for live popups/startup summaries, and independent Error/Fatal removal/resume.
+- All five game-bundled Mono integration checks passed. Persistence checks cover released version-1 individual settings, all three independent level choices, atomic replacement, locked-file failure preserving the entire policy, and reset to all levels enabled with individual rules cleared.
+- Default checkbox state is enabled for Warning, Error and Fatal. The same shared policy applies to live popups and startup-summary contributions. Disabled levels remain in history. Reset enables every level and clears individual rules in one saved snapshot.
+- Backward reading is limited to the individual-setting format used by released v0.1.3. Its IDs are preserved and all levels default to enabled. The unreleased Warning-only development format has no migration path and is rejected explicitly without overwriting it.
+- Package/ZIP contain exactly DLL, _info.ini and the English README. Archive CRC, source/build byte equality and SHA256SUMS.txt were verified. DLL SHA256: 1fdc6f7f0085bdabd435b2dc77a4c9b6d849a5f6dca05850d2bba1087d20d7a0. ZIP SHA256: d59057a78e14c495b4520a89dc4bde2d0dde21ea88cf5abca75223f98b148d85.
+- No game launch or live visual validation was performed. The verified three-file package was subsequently deployed locally at the user's request. GitHub publication uses the same tested DLL and ZIP.

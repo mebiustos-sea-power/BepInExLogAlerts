@@ -97,6 +97,11 @@ internal sealed class OverlayView : IDisposable
         string status = ready ? journal.Items.Count + words.T("件の履歴", " history groups") : words.T("起動中のログを収集中。メニュー表示後に取り込みます。", "Collecting startup logs. Recovery completes after the main menu is shown.");
         if (journal.Evicted != 0) status += words.T(" ／ 古い履歴を", " / Old groups removed: ") + journal.Evicted + words.T("件削除", "");
         GUI.Label(new Rect(rect.x + 16, rect.y + 46, rect.width - 32, 38), status, small!);
+        GUI.Label(Rect(layout.PopupHeading), words.T("ポップアップ通知", "Popup notifications"), text!);
+        DrawLevelToggle(layout.NotifyWarning, Severity.Warning, HistoryHit.NotifyWarning);
+        DrawLevelToggle(layout.NotifyError, Severity.Error, HistoryHit.NotifyError);
+        DrawLevelToggle(layout.NotifyFatal, Severity.Fatal, HistoryHit.NotifyFatal);
+        GUI.Label(Rect(layout.PopupHint), words.T("チェックを外しても履歴には記録します。", "Unchecked levels are still recorded in history."), small!);
         DrawButton(layout.ClearSuppression, words.T("通知しない設定をすべて解除", "Reset all muted notifications") + " (" + rules.Count + ")", HistoryHit.ClearSuppression, rules.Count != 0);
         AlertItem? selected = history.Selected;
         history.ClampScroll(layout);
@@ -122,7 +127,7 @@ internal sealed class OverlayView : IDisposable
         { GUI.Label(Rect(layout.Detail), words.T("警告・エラーはありません。", "No warnings or errors."), text!); return; }
         GUI.Label(Rect(layout.Heading), selected.Record.Level + "  ×" + selected.Count + "\n" + selected.Record.Source, text!);
         DrawButton(layout.Copy, now < copiedUntil ? words.T("コピー済", "Copied") : words.T("コピー", "Copy"), HistoryHit.Copy);
-        bool suppressed = rules.IsSuppressed(selected.Record);
+        bool suppressed = rules.IsIndividuallySuppressed(selected.Record);
         bool toggleHover = history.Hover == HistoryHit.Suppress;
         toggle!.Draw(Rect(layout.Suppress), new GUIContent(words.T("今後、このログを通知しない", "Do not notify me of this log again")),
             toggleHover, toggleHover && history.Pressed == HistoryHit.Suppress, suppressed, false);
@@ -133,6 +138,13 @@ internal sealed class OverlayView : IDisposable
         try { GUI.Label(new Rect(0, -history.DetailScroll, layout.Detail.Width - 24, contentHeight), selected.Record.Message, detail); }
         finally { GUI.EndGroup(); }
         DrawScrollbar(layout.DetailTrack, history.DetailContentHeight, history.DetailScroll, HistoryHit.DetailScroll);
+    }
+
+    private void DrawLevelToggle(UiRect rect, Severity level, HistoryHit kind)
+    {
+        bool hover = history.Hover == kind;
+        toggle!.Draw(Rect(rect), new GUIContent(level.ToString()), hover,
+            hover && history.Pressed == kind, rules.IsLevelEnabled(level), false);
     }
 
     private void DrawButton(UiRect rect, string label, HistoryHit kind, bool enabled = true)

@@ -10,7 +10,7 @@ internal static class Program
     private static void Check(bool value, string message) { if (!value) throw new Exception(message); }
     private static LogRecord Record(string message, bool startup = false, Severity level = Severity.Warning) => new LogRecord(level, "Test Mod", message, startup);
     private static void Test(string name, Action action) { action(); count++; Console.WriteLine("PASS " + name); }
-    private static NotificationRules Rules() => new NotificationRules(Array.Empty<string>(), _ => { });
+    private static NotificationRules Rules() => new NotificationRules(new NotificationRuleSet(Array.Empty<string>()), _ => { });
     private static AlertJournal HistoryJournal(int count)
     {
         var journal = new AlertJournal(count + 5, 10);
@@ -294,11 +294,11 @@ internal static class Program
             Test("Failed rule saves leave checkbox state and previous settings intact", () =>
             {
                 var record = Record("x");
-                var rules = new NotificationRules(Array.Empty<string>(), _ => throw new IOException("disk unavailable"));
+                var rules = new NotificationRules(new NotificationRuleSet(Array.Empty<string>()), _ => throw new IOException("disk unavailable"));
                 bool failed = false;
                 try { rules.SetSuppressed(record, true); } catch (IOException) { failed = true; }
                 Check(failed && rules.Count == 0 && !rules.IsSuppressed(record) && rules.Revision == 0, "Failed save silently changed the live policy.");
-                rules = new NotificationRules(new[] { record.NotificationId }, _ => throw new IOException("disk unavailable"));
+                rules = new NotificationRules(new NotificationRuleSet(new[] { record.NotificationId }), _ => throw new IOException("disk unavailable"));
                 failed = false;
                 try { rules.Clear(); } catch (IOException) { failed = true; }
                 Check(failed && rules.IsSuppressed(record) && rules.Count == 1, "Failed bulk reset discarded the previous policy.");
@@ -373,6 +373,229 @@ internal static class Program
                 mailbox.Post(record.Level, record.Source, record.Message, DateTimeOffset.Now);
                 foreach (LogRecord pending in mailbox.Drain(4)) center.Receive(pending, 2);
                 Check(center.Journal.Items.Single().Count == 2 && center.Toasts.Visible.Single().Count == 1, "A newly received event was lost after resuming.");
+            });
+            Test("Global Warning suppression keeps history and leaves Error/Fatal and individual rules intact", () =>
+            {
+                var rules = Rules();
+                var center = new NotificationCenter(20, 10, 6, 10, rules);
+                var warning = Record("global warning");
+                center.Receive(warning, 0);
+                Check(rules.IsLevelEnabled(Severity.Warning) && center.Toasts.Visible.Single().Level == Severity.Warning, "Warnings were not enabled by default.");
+                rules.SetLevelEnabled(Severity.Warning, false); center.Tick(1);
+                Check(center.Toasts.Visible.Count == 0, "An already visible Warning survived global suppression.");
+                center.Receive(new LogRecord(Severity.Warning, "BepInEx", "another warning", false), 2);
+                var error = Record("error", level: Severity.Error);
+                center.Receive(error, 2);
+                center.Receive(Record("fatal", level: Severity.Fatal), 2);
+                Check(center.Journal.Items.Count == 4 && center.Toasts.Visible.Count == 2 && center.Toasts.Visible.All(t => t.Level != Severity.Warning), "History was lost or other severities changed.");
+                rules.SetSuppressed(error, true); center.Tick(3);
+                Check(center.Toasts.Visible.Single().Level == Severity.Fatal, "Global suppression bypassed the individual Error mute.");
+            });
+            Test("Global Warning suppression updates startup summaries without restoring removed warnings", () =>
+            {
+                var rules = Rules();
+                var center = new NotificationCenter(20, 10, 6, 10, rules);
+                var warnings = new LogRecord(Severity.Warning, "Mod", "startup", true, count: 3);
+                var error = new LogRecord(Severity.Error, "Mod", "error", true, count: 2);
+                center.PublishStartup(new[] { warnings, error }, 0);
+                Toast summary = center.Toasts.Visible.Single();
+                rules.SetLevelEnabled(Severity.Warning, false); center.Tick(1);
+                Check(summary.Warnings == 0 && summary.Errors == 2 && center.Journal.Items.Count == 2, "Startup Warning contributions remained or history was removed.");
+                rules.SetLevelEnabled(Severity.Warning, true); center.Tick(2);
+                Check(summary.Warnings == 0 && summary.Errors == 2, "Disabling the option restored past startup warnings.");
+                rules.SetLevelEnabled(Severity.Warning, false);
+                var onlyWarnings = new NotificationCenter(20, 10, 6, 10, rules);
+                onlyWarnings.PublishStartup(new[] { warnings }, 0);
+                Check(onlyWarnings.Toasts.Visible.Count == 0 && onlyWarnings.Journal.Items.Single().Count == 3, "Muted Warning-only startup still produced a summary.");
+            });
+            Test("Resuming global Warning notifications preserves individual mutes and only notifies future events", () =>
+            {
+                var rules = Rules();
+                var center = new NotificationCenter(20, 10, 6, 10, rules);
+                LogRecord a = Record("individually muted"), b = Record("globally muted");
+                rules.SetLevelEnabled(Severity.Warning, false);
+                Check(rules.IsSuppressed(a) && !rules.IsIndividuallySuppressed(a), "Global state was confused with an individual rule.");
+                rules.SetSuppressed(a, true);
+                center.Receive(a, 0); center.Receive(b, 0);
+                rules.SetLevelEnabled(Severity.Warning, true); center.Tick(1);
+                Check(rules.IsSuppressed(a) && !rules.IsSuppressed(b) && center.Toasts.Visible.Count == 0, "Resume lost an individual mute or replayed past notifications.");
+                center.Receive(a, 2); center.Receive(b, 2);
+                Check(center.Journal.Items.Sum(i => i.Count) == 4 && center.Toasts.Visible.Single().Item!.Record.Message == b.Message && center.Toasts.Visible.Single().Count == 1, "A muted message appeared or old counts entered the resumed popup.");
+            });
+            Test("Logs queued while each level is disabled stay silent after reset", () =>
+            {
+                foreach (Severity level in new[] { Severity.Warning, Severity.Error, Severity.Fatal })
+                {
+                    var rules = Rules();
+                    var mailbox = new LogMailbox(4, rules);
+                    mailbox.SealStartup(() => 0, out _);
+                    rules.SetLevelEnabled(level, false);
+                    mailbox.Post(level, "Mod", "queued", DateTimeOffset.Now);
+                    rules.Clear();
+                    var center = new NotificationCenter(20, 10, 6, 10, rules);
+                    foreach (LogRecord record in mailbox.Drain(4)) center.Receive(record, 1);
+                    Check(center.Journal.Items.Count == 1 && center.Toasts.Visible.Count == 0, "Reset replayed an event received while its level was disabled.");
+                    mailbox.Post(level, "Mod", "queued", DateTimeOffset.Now);
+                    foreach (LogRecord record in mailbox.Drain(4)) center.Receive(record, 2);
+                    Check(center.Journal.Items.Single().Count == 2 && center.Toasts.Visible.Single().Count == 1, "A new event failed to resume with a fresh popup count.");
+                }
+            });
+            Test("Released individual rules survive upgrade and per-level preferences persist independently", () =>
+            {
+                string directory = Path.Combine(Path.GetTempPath(), "BepInExLogAlerts-released-rules-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(directory);
+                try
+                {
+                    string path = Path.Combine(directory, "rules");
+                    LogRecord a = Record("saved Warning"), b = Record("saved Error", level: Severity.Error);
+                    File.WriteAllText(path, "BepInExLogAlerts muted logs / 1\n" + a.NotificationId + "\n" + b.NotificationId + "\n");
+                    byte[] previous = File.ReadAllBytes(path);
+                    var store = new NotificationRuleStore(path);
+                    var rules = new NotificationRules(store.Load(), store.Save);
+                    Check(rules.Count == 2 && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(rules.IsLevelEnabled) && rules.IsSuppressed(a) && rules.IsSuppressed(b) && File.ReadAllBytes(path).SequenceEqual(previous), "Loading the released format changed it or lost settings.");
+                    rules.SetLevelEnabled(Severity.Warning, false);
+                    rules.SetLevelEnabled(Severity.Error, false);
+                    rules.SetLevelEnabled(Severity.Fatal, false);
+                    rules = new NotificationRules(store.Load(), store.Save);
+                    Check(rules.Count == 5 && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !rules.IsLevelEnabled(level)) && rules.IsIndividuallySuppressed(a) && rules.IsIndividuallySuppressed(b), "Reload lost a level or an individual setting.");
+                    rules.SetLevelEnabled(Severity.Error, true);
+                    rules = new NotificationRules(store.Load(), store.Save);
+                    Check(rules.IsLevelEnabled(Severity.Error) && !rules.IsLevelEnabled(Severity.Warning) && !rules.IsLevelEnabled(Severity.Fatal) && rules.IsIndividuallySuppressed(b), "Changing Error modified another level or erased an individual setting.");
+                    rules.Clear();
+                    rules = new NotificationRules(store.Load(), store.Save);
+                    Check(rules.Count == 0 && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(rules.IsLevelEnabled) && !rules.IsSuppressed(a) && !rules.IsSuppressed(b), "Reset did not persist all enabled levels and cleared individual settings.");
+                }
+                finally { Directory.Delete(directory, true); }
+            });
+            Test("Failed level changes and reset preserve every level and individual setting", () =>
+            {
+                var error = Record("preserved", level: Severity.Error);
+                foreach (Severity level in new[] { Severity.Warning, Severity.Error, Severity.Fatal })
+                {
+                    var rules = new NotificationRules(new NotificationRuleSet(new[] { error.NotificationId }), _ => throw new IOException("disk unavailable"));
+                    bool failed = false;
+                    try { rules.SetLevelEnabled(level, false); } catch (IOException) { failed = true; }
+                    Check(failed && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(rules.IsLevelEnabled) && rules.IsSuppressed(error) && rules.Count == 1 && rules.Revision == 0, "A failed save changed a live level or individual setting.");
+                }
+                var muted = new NotificationRules(new NotificationRuleSet(new[] { error.NotificationId }, false, false, false), _ => throw new IOException("disk unavailable"));
+                bool resetFailed = false;
+                try { muted.Clear(); } catch (IOException) { resetFailed = true; }
+                Check(resetFailed && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !muted.IsLevelEnabled(level)) && muted.IsIndividuallySuppressed(error) && muted.Count == 4 && muted.Revision == 0, "A failed reset partially cleared the policy.");
+            });
+            Test("Invalid per-level settings and the unsupported development format are not silently reset", () =>
+            {
+                string directory = Path.Combine(Path.GetTempPath(), "BepInExLogAlerts-invalid-levels-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(directory);
+                try
+                {
+                    string path = Path.Combine(directory, "rules");
+                    foreach (string options in new[] { "Warning=maybe\nError=true\nFatal=true", "Warning=true\nError=maybe\nFatal=true", "Warning=true\nError=true\nFatal=maybe", "Warning=true\nError=true", "Warning=true\nError=true\nFatal=true\ninvalid rule", "SuppressWarnings=true" })
+                    {
+                        File.WriteAllText(path, "BepInExLogAlerts muted logs / 2\n" + options + "\n");
+                        byte[] original = File.ReadAllBytes(path);
+                        bool failed = false;
+                        try { new NotificationRuleStore(path).Load(); } catch (InvalidDataException) { failed = true; }
+                        Check(failed && File.ReadAllBytes(path).SequenceEqual(original), "An invalid or unsupported setting was silently accepted or overwritten.");
+                    }
+                }
+                finally { Directory.Delete(directory, true); }
+            });
+            Test("Three positive level checkboxes and reset work independently with empty history at several scales", () =>
+            {
+                foreach (var screen in new[] { (1920f, 1080f, 1f), (3840f, 2160f, 1f), (2560f, 1440f, 1.4f), (1280f, 720f, 2f) })
+                {
+                    var rules = Rules();
+                    var history = new HistoryInteraction(new AlertJournal(20, 10), rules) { Open = true };
+                    var layout = new HistoryLayout(screen.Item1, screen.Item2, screen.Item3);
+                    var controls = new[] { (Severity.Warning, layout.NotifyWarning), (Severity.Error, layout.NotifyError), (Severity.Fatal, layout.NotifyFatal) };
+                    Check(controls.All(c => rules.IsLevelEnabled(c.Item1)), "Level checkboxes were not all enabled by default.");
+                    int disabled = 0;
+                    foreach (var control in controls)
+                    {
+                        Click(history, layout, control.Item2, _ => throw new Exception("A level checkbox copied a log."));
+                        disabled++;
+                        Check(!rules.IsLevelEnabled(control.Item1) && rules.Count == disabled && history.Selected == null, "A checkbox toggled another level or required a selected row.");
+                    }
+                    history.Open = false; history.Open = true;
+                    Check(controls.All(c => !rules.IsLevelEnabled(c.Item1)), "Closing history lost the level choices.");
+                    Click(history, layout, layout.ClearSuppression, _ => { });
+                    Check(controls.All(c => rules.IsLevelEnabled(c.Item1)) && rules.Count == 0, "Reset did not enable all three levels with empty history.");
+                    foreach (var control in controls)
+                    {
+                        float x = control.Item2.X + 20, y = control.Item2.Y + 15;
+                        Send(history, layout, x, y, true, false, true, 0, _ => { });
+                        Send(history, layout, layout.Detail.X, layout.Detail.Y, false, true, false, 0, _ => { });
+                        Check(rules.IsLevelEnabled(control.Item1), "Releasing outside toggled a level.");
+                    }
+                }
+            });
+            Test("The individual history checkbox remains editable independently of global Warning suppression", () =>
+            {
+                var rules = Rules();
+                var journal = HistoryJournal(3);
+                var history = new HistoryInteraction(journal, rules) { Open = true };
+                var layout = new HistoryLayout(1920, 1080, 1);
+                LogRecord selected = history.Selected!.Record;
+                Click(history, layout, layout.NotifyWarning, _ => { });
+                Check(rules.IsSuppressed(selected) && !rules.IsIndividuallySuppressed(selected), "Global toggle created an individual rule.");
+                Click(history, layout, layout.Suppress, _ => { });
+                Check(rules.IsIndividuallySuppressed(selected), "Individual checkbox could not add a rule while globally muted.");
+                Click(history, layout, layout.NotifyWarning, _ => { });
+                Check(rules.IsSuppressed(selected), "Global resume erased the individual setting.");
+                Click(history, layout, layout.NotifyWarning, _ => { });
+                Click(history, layout, layout.Suppress, _ => { });
+                Check(!rules.IsIndividuallySuppressed(selected) && rules.IsSuppressed(selected), "Individual unmute incorrectly bypassed the global setting.");
+                Click(history, layout, layout.ClearSuppression, _ => { });
+                Check(rules.IsLevelEnabled(Severity.Warning) && !rules.IsSuppressed(selected), "Combined reset failed from the history UI.");
+            });
+            Test("All eight level combinations affect popups independently while retaining history", () =>
+            {
+                var levels = new[] { Severity.Warning, Severity.Error, Severity.Fatal };
+                for (int mask = 0; mask < 8; mask++)
+                {
+                    var rules = Rules();
+                    for (int i = 0; i < levels.Length; i++) rules.SetLevelEnabled(levels[i], (mask & (1 << i)) != 0);
+                    for (int i = 0; i < levels.Length; i++)
+                    {
+                        var center = new NotificationCenter(20, 10, 6, 10, rules);
+                        center.Receive(Record("level choice", level: levels[i]), 0);
+                        Check(center.Journal.Items.Count == 1 && center.Toasts.Visible.Count == ((mask & (1 << i)) != 0 ? 1 : 0), "A level combination changed another level or lost history.");
+                    }
+                }
+            });
+            Test("Startup summaries honor all eight independent level combinations", () =>
+            {
+                var levels = new[] { Severity.Warning, Severity.Error, Severity.Fatal };
+                for (int mask = 0; mask < 8; mask++)
+                {
+                    var rules = Rules();
+                    for (int i = 0; i < levels.Length; i++) rules.SetLevelEnabled(levels[i], (mask & (1 << i)) != 0);
+                    var center = new NotificationCenter(20, 10, 6, 10, rules);
+                    center.PublishStartup(new[] { new LogRecord(Severity.Warning, "Mod", "w", true, count: 2), new LogRecord(Severity.Error, "Mod", "e", true, count: 3), new LogRecord(Severity.Fatal, "Mod", "f", true, count: 5) }, 0);
+                    Check(center.Journal.Items.Count == 3, "Level choices removed startup history.");
+                    if (mask == 0) Check(center.Toasts.Visible.Count == 0, "Disabling all levels left a startup popup.");
+                    else
+                    {
+                        Toast summary = center.Toasts.Visible.Single();
+                        Check(summary.Warnings == ((mask & 1) != 0 ? 2 : 0) && summary.Errors == (((mask & 2) != 0 ? 3 : 0) + ((mask & 4) != 0 ? 5 : 0)), "Startup summary counts conflated Error and Fatal eligibility.");
+                    }
+                }
+            });
+            Test("Error and Fatal popups can be removed and resumed independently without replay", () =>
+            {
+                var rules = Rules();
+                var center = new NotificationCenter(20, 10, 6, 10, rules);
+                var error = Record("error card", level: Severity.Error);
+                var fatal = Record("fatal card", level: Severity.Fatal);
+                center.Receive(error, 0); center.Receive(fatal, 0);
+                rules.SetLevelEnabled(Severity.Error, false); center.Tick(1);
+                Check(center.Toasts.Visible.Single().Level == Severity.Fatal, "Disabling Error removed Fatal or left Error visible.");
+                rules.SetLevelEnabled(Severity.Fatal, false); center.Tick(2);
+                Check(center.Toasts.Visible.Count == 0 && center.Journal.Items.Count == 2, "Disabling Fatal lost history or left a popup.");
+                rules.SetLevelEnabled(Severity.Error, true); rules.SetLevelEnabled(Severity.Fatal, true); center.Tick(3);
+                Check(center.Toasts.Visible.Count == 0, "Re-enabling levels replayed old popups.");
+                center.Receive(error, 4); center.Receive(fatal, 4);
+                Check(center.Toasts.Visible.Count == 2 && center.Toasts.Visible.All(t => t.Count == 1), "New Error/Fatal occurrences did not resume with fresh popup counts.");
             });
             Console.WriteLine("Passed " + count + " behavior checks."); return 0;
         }

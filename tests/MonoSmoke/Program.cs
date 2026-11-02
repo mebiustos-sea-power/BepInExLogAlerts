@@ -26,7 +26,7 @@ internal static class Program
             Logger.Listeners.Add(disk);
             source = Logger.CreateLogSource("Integration Test");
             source.LogWarning("Repeated warning");
-            var box = new LogMailbox(128, new NotificationRules(Array.Empty<string>(), _ => { }));
+            var box = new LogMailbox(128, new NotificationRules(new NotificationRuleSet(Array.Empty<string>()), _ => { }));
             listener = new BufferedLogListener(box, false);
             Logger.Listeners.Add(listener);
             source.LogWarning("Repeated warning");
@@ -63,17 +63,25 @@ internal static class Program
             rules.SetSuppressed(a, true); rules.SetSuppressed(b, true);
             var reloaded = new NotificationRules(store.Load(), store.Save);
             Check(reloaded.Count == 2 && reloaded.IsSuppressed(a) && reloaded.IsSuppressed(b), "Mono did not preserve suppression rules after durable replacement.");
+            File.WriteAllText(rulePath, "BepInExLogAlerts muted logs / 1\n" + a.NotificationId + "\n" + b.NotificationId + "\n");
+            reloaded = new NotificationRules(store.Load(), store.Save);
+            Check(reloaded.IsLevelEnabled(Severity.Warning) && reloaded.Count == 2, "Legacy settings did not preserve defaults and individual rules on Mono.");
+            reloaded.SetLevelEnabled(Severity.Warning, false);
+            reloaded.SetLevelEnabled(Severity.Error, false);
+            reloaded.SetLevelEnabled(Severity.Fatal, false);
+            reloaded = new NotificationRules(store.Load(), store.Save);
+            Check(new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !reloaded.IsLevelEnabled(level)) && reloaded.Count == 5 && reloaded.IsIndividuallySuppressed(a) && reloaded.IsIndividuallySuppressed(b), "Mono did not persist all three level choices during the released-format upgrade.");
             byte[] saved = File.ReadAllBytes(rulePath);
             using (var held = new FileStream(rulePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 bool failed = false;
                 try { reloaded.Clear(); } catch (IOException) { failed = true; }
-                Check(failed && reloaded.Count == 2 && File.ReadAllBytes(rulePath).SequenceEqual(saved), "Failed replacement lost the previous settings.");
+                Check(failed && reloaded.Count == 5 && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !reloaded.IsLevelEnabled(level)) && File.ReadAllBytes(rulePath).SequenceEqual(saved), "Failed replacement lost the previous settings.");
             }
             Check(Directory.GetFiles(root, "*.tmp").Length == 0, "Failed persistence left an uncommitted temporary file.");
             reloaded.Clear();
-            Check(store.Load().Count == 0, "Mono did not persist the reset after releasing the file lock.");
-            Console.WriteLine("PASS Persisted notification rules, atomic replacement, failed-save rollback, and bulk reset on game Mono");
+            Check(store.Load().Count == 0 && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => store.Load().IsLevelEnabled(level)), "Mono did not persist the reset after releasing the file lock.");
+            Console.WriteLine("PASS Released settings, independent levels, atomic replacement, failed-save rollback, and combined reset on game Mono");
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
