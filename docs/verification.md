@@ -35,3 +35,10 @@ Game launch, installation, actual screen/input validation, and Workshop publicat
 - Both mod-manager descriptions now contain only the one-sentence functional summary.
 - The release ZIP contains exactly BepInExLogAlerts/BepInExLogAlerts.dll, BepInExLogAlerts/_info.ini and BepInExLogAlerts/README.md. SHA256SUMS.txt covers the ZIP. Local configuration, local agent memory, game assemblies and build intermediates are excluded.
 - Previous history pointer operation was confirmed working by the user. Rendering of the 0.1.3 color change has not been checked in a live game session by this chat.
+
+
+## GitHub documentation language correction
+
+- Translated the repository README, versioned release notes, and GitHub download ZIP's README into English. This correction changes documentation only; no new runtime version is introduced.
+- Repacked the existing v0.1.3 ZIP by replacing only README.md, then regenerated SHA256SUMS.txt. Verified the three archive entries, the English README, and unchanged DLL and _info.ini bytes against the previous archive.
+- Existing runtime tests were not repeated for this documentation-only correction. Workshop files, the local three-file package used for Workshop, and the game installation were not changed. The published v0.1.3 source tag remains unchanged.

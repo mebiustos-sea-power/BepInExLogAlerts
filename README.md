@@ -1,113 +1,113 @@
 # BepInEx Log Alerts
 
-Sea PowerのBepInExログに出力されたWarning / Error / Fatalを、ゲーム画面の上部中央へ通知するAnchor Chain MODです。
+An Anchor Chain mod for Sea Power that displays BepInEx Warning / Error / Fatal messages at the top center of the game screen.
 
-- 表示名：BepInEx Log Alerts
-- MOD識別子：`mebiustos.bepinexlogalerts`
-- DLL：`BepInExLogAlerts.dll`
-- バージョン：0.1.3
-- 必須：Sea Power、BepInEx 5.4.x、Anchor Chain
+- Display name: BepInEx Log Alerts
+- Mod ID: `mebiustos.bepinexlogalerts`
+- DLL: `BepInExLogAlerts.dll`
+- Version: 0.1.3
+- Requirements: Sea Power, BepInEx 5.4.x, Anchor Chain
 
-## 動作
+## How it works
 
-MODの初期化時に`ILogListener`を登録し、起動中の通知を蓄積します。初回メニュー表示後、現在のBepInExディスク出力をフラッシュして起動ログを補完し、受信済みログとの件数の重複を整理します。起動順の指定や他MODの変更は必要ありません。
+The mod registers an `ILogListener` during initialization and collects startup messages. After the main menu is first displayed, it flushes the current BepInEx disk log, recovers earlier messages, and reconciles overlapping occurrence counts with the messages already received. There is no need to specify a loading order or modify other mods.
 
-起動完了はHarmony Startup Optimizerの`StartupScreen`と同じ判定です。既存のメニューが有効で`CurrentWindow`があり、ロード画面が存在しないか、その描画カメラが無効であることを確認します。メニューの初回Repaintを待って取り込みを開始し、起動中の警告・エラーを1つの通知にまとめます。この通知は初回のみです。Harmony Startup Optimizer自体への依存はありません。
+Startup completion uses the same `StartupScreen` checks as Harmony Startup Optimizer: an existing menu must be active with a `CurrentWindow`, and the loading screen must either be absent or have its rendering camera disabled. Recovery waits for the menu's first Repaint, then combines startup warnings and errors into one notification. This summary appears once per launch. Harmony Startup Optimizer itself is not a dependency.
 
-以後は`ILogListener`で受信し、通常通知を表示します。同じレベル・発生元・本文のログは既定10秒以内なら回数で集約します。通知は最大2件、Warningは6秒、Error/Fatalは10秒で消えます。時間は初回描画から数えます。同じ通知の連発で表示時間を延長し続けることはありません。
+New messages are received through `ILogListener`. The mod does not periodically poll or repeatedly read the log file to monitor new messages. Identical live messages with the same level, source, and body are grouped within a default 10-second window. At most two notifications are visible at once. Warnings disappear after 6 seconds, and errors/fatal messages after 10 seconds, measured from their first render. Repeated messages do not keep extending a notification's lifetime.
 
-通知はクリックやフォーカスを取得しません。通常時は画面表示がなく、ゲームを停止しません。ゲーム速度に左右されない実時間を使います。
+Popup notifications do not capture clicks or focus. Nothing is drawn when there are no visible notifications and the history is closed. The mod does not pause the game, and notification durations use real time rather than simulation time.
 
-## 履歴
+## History
 
-`F8`で履歴を開閉します。`Escape`または閉じるボタンでも閉じられます。履歴から各ログを選択すると本文とスタックトレースを確認でき、コピーボタンで発生元・レベル・本文をコピーできます。各行の左端の線はポップアップと同じく、Warningは黄橙、Error／Fatalは赤で示します。選択中の行は背景を明るくして区別します。一覧・詳細はホイールとスクロールバーのドラッグでスクロールできます。
+Press `F8` to toggle the history. `Escape` or the Close button also closes it. Select a log to view its message and stack trace, or use Copy to copy its source, level, and message. Each row has the same severity stripe as its popup: yellow-orange for Warning and red for Error/Fatal. The selected row has a brighter background. Both panes support the mouse wheel and draggable scrollbars.
 
-通知が消えても履歴は保持します。既定で200グループまで保存し、それを超えた場合は古い履歴を削除した件数を表示します。ファイル内のログに時刻がないため、過去ログの発生時刻は推測せず「起動時」と表示します。「発生元」はログを出した名前であり、不具合の原因MODを断定するものではありません。
+History remains available after notifications disappear. It retains up to 200 groups by default and reports how many older groups have been removed when the limit is reached. Recovered file entries are labeled "Startup" because the log file does not provide timestamps from which to recover their original times. The source is the name that emitted the log; it does not establish which mod caused the underlying problem.
 
-## 個別の通知抑止・解除
+## Muting individual notifications
 
-履歴でログを選択し、右側の「今後、このログを通知しない」をチェックすると、そのログのポップアップを止められます。チェックを外すと、そのログだけ通知を再開できます。抑止したログも収集・履歴保存を続け、一覧に「通知しない」と表示します。
+Select an entry in the history and check "Do not notify me of this log again" to stop its popups. Uncheck it to resume notifications for that entry. Muted messages are still collected and retained in history, where they are marked "Muted".
 
-画面上部の「通知しない設定をすべて解除」で一括解除できます。現在の履歴に存在しない、過去の起動時に指定した設定も解除します。通知抑止の設定はゲーム再起動後も保持します。BepInEx由来のログも既定では対象に残します。
+Use "Reset all muted notifications" at the top of the history to clear every mute setting, including settings for messages absent from the current session's history. Mute settings persist across game restarts. BepInEx's own warnings and errors remain eligible by default.
 
-対象はログレベル・発生元・本文の組み合わせです。起動時かプレイ中か、発生時刻、回数には左右されません。本文中の番号などが変わるログは別のログとして扱います。ワイルドカードや部分一致による除外は行いません。
+A mute setting matches the combination of log level, source, and stored message body. It is independent of startup/live status, timestamp, and occurrence count. Changes to numbers or other text in the body make a different message. There are no wildcard or substring exclusions.
 
-起動時のまとめ通知の件数と通常のポップアップに同じ設定を適用します。全件抑止された場合は起動時ポップアップを出しません。表示中の通知を抑止すると、その通知も取り下げます。解除しても過去のポップアップや過去分の件数は再表示せず、次に発生した分から通知します。履歴の件数は抑止中の発生分も含むため、再開後のポップアップの回数とは異なることがあります。
+The same mute settings apply to startup summary counts and regular popups. No startup popup is shown if every startup message is muted. Muting a visible notification also removes it. Resuming notifications does not redisplay old popups or restore removed counts; it applies to future occurrences. History counts include muted occurrences, so they may differ from popup counts after notifications resume.
 
-設定は`BepInEx/config/mebiustos.bepinexlogalerts.mutedlogs`へ初回変更時に保存します。画面からの変更は、保存成功後に反映します。保存に失敗した場合は既存設定を維持し、ログと履歴へ理由を表示します。ファイルが壊れている・読み取れない場合は、既存の初期化エラー処理に従ってログへ理由を出し、無断で初期化・上書きしません。
+Settings are written to `BepInEx/config/mebiustos.bepinexlogalerts.mutedlogs` on the first change. Changes made in the history take effect only after saving succeeds. A failed save preserves the previous settings and reports the reason in the log and history. If the settings file is corrupt or unreadable, initialization reports the error without silently resetting or overwriting the file.
 
-## 導入
+## Installation
 
-1. Anchor Chainとそのpreloaderを導入してください。
-2. [Releases](https://github.com/mebiustos-sea-power/BepInExLogAlerts/releases/latest)から配布ZIPをダウンロードして展開し、`BepInExLogAlerts`フォルダを`Sea Power_Data/StreamingAssets`へコピーします。
-3. MODマネージャーでAnchor ChainとBepInEx Log Alertsを有効にし、ゲームを再起動します。
+1. Install Anchor Chain and its preloader.
+2. Download and extract the ZIP from [Releases](https://github.com/mebiustos-sea-power/BepInExLogAlerts/releases/latest), then copy the `BepInExLogAlerts` folder into `Sea Power_Data/StreamingAssets`.
+3. Enable Anchor Chain and BepInEx Log Alerts in the mod manager, then restart the game.
 
-Workshopで配布する場合も、同じパッケージ内容を使用します。このリポジトリの作成やビルドだけでは、ゲームへのインストールやWorkshopへの公開は行いません。
+The GitHub ZIP contains the mod DLL, `_info.ini`, and this README. Building the repository does not publish an item to Steam Workshop.
 
-## 設定
+## Configuration
 
-初回有効起動時に`BepInEx/config/mebiustos.bepinexlogalerts.cfg`を作成します。設定変更は次回のゲーム起動から反映されます。
+The mod creates `BepInEx/config/mebiustos.bepinexlogalerts.cfg` on its first enabled launch. Configuration changes take effect on the next game launch.
 
-| セクション・キー | 既定値 | 意味 |
+| Section / key | Default | Meaning |
 |---|---|---|
-| Logging / IncludeUnityLogs | false | Unity Logも対象にする。ゲーム本体のログが混ざり、原因MODを特定できない場合があります |
-| Display / Width | 680 | 1080p基準の通知幅 |
-| Display / Top | 20 | 1080p基準の上端からの距離 |
-| Display / Scale | 1 | 画面解像度の自動補正に加える倍率 |
-| Display / WarningSeconds | 6 | Warningの表示秒数 |
-| Display / ErrorSeconds | 10 | Error/Fatalの表示秒数 |
-| Display / RepeatSeconds | 10 | 同じログをまとめる間隔 |
-| Display / Language | Auto | ゲームの言語に追従。English / Japaneseも指定可能 |
-| Input / HistoryKey | F8 | 履歴を開閉するキー |
-| Limits / HistoryEntries | 200 | 履歴グループ数の上限 |
-| Limits / PendingEntries | 4096 | 未処理ログ数の上限 |
-| Limits / StartupLogMegabytes | 8 | 起動ログファイルの読込上限MiB |
+| Logging / IncludeUnityLogs | false | Also include Unity Log. These may be game messages whose originating mod is unknown. |
+| Display / Width | 680 | Notification width at 1080p. |
+| Display / Top | 20 | Distance from the top at 1080p. |
+| Display / Scale | 1 | Additional scale multiplier after automatic resolution scaling. |
+| Display / WarningSeconds | 6 | Warning duration in seconds. |
+| Display / ErrorSeconds | 10 | Error/Fatal duration in seconds. |
+| Display / RepeatSeconds | 10 | Time window for grouping identical messages. |
+| Display / Language | Auto | Follow the game's language, or select English / Japanese. |
+| Input / HistoryKey | F8 | Toggle the history. |
+| Limits / HistoryEntries | 200 | Maximum retained history groups. |
+| Limits / PendingEntries | 4096 | Maximum queued log events. |
+| Limits / StartupLogMegabytes | 8 | Maximum MiB read from the startup log file. |
 
-## ログ補完の範囲と失敗時の扱い
+## Startup recovery and error handling
 
-起動前ログを補完するには、BepInExの`Logging.Disk.Enabled=true`、`AppendLog=false`、および必要なログレベルの保存が必要です。既定設定がこれに該当します。追記モードにはセッションごとの確実な境界がないため、`AppendLog=true`のときはファイルからの補完を行わず、理由をログと画面へ明示します。ディスク出力が無効・アクセス不能・未対応形式の場合も、補完失敗を明示し、直接受信できたログの通知は継続します。
+Recovering messages emitted before this mod initialized requires BepInEx `Logging.Disk.Enabled=true`, `AppendLog=false`, and disk logging of the desired levels. These are the default settings. Append mode has no reliable boundary between sessions, so file recovery is skipped with an explicit log and notification if `AppendLog=true`. Disabled or inaccessible disk logging and unsupported writer formats are also reported; directly received notifications continue.
 
-Unityログは既定で対象外です。対象にしても、登録前のUnityログを補完するにはBepInEx側の`Logging.Disk.WriteUnityLog=true`が必要です。通知MOD起動前にファイルへ記録されなかったログは回収できません。
+Unity Log is excluded by default. Even when enabled in this mod, recovering earlier Unity messages requires BepInEx `Logging.Disk.WriteUnityLog=true`. Messages that were not written to disk before this mod initialized cannot be recovered.
 
-複数のログファイルが存在する場合は、現在のプロセスの実際のディスクライターから読み取り先を取得します。`LogOutput.log`というファイル名だけで別プロセスのログを選択しません。
+If several log files exist, the mod obtains the path from the current process's actual disk writer. It does not select another process's log based only on the name `LogOutput.log`.
 
-巨大な起動ログは末尾から指定上限まで取り込み、切り詰めた事実を通知します。1イベントの本文は16384文字まで保存し、超過した本文には切り詰め表示を付けます。受信キューの上限を超えた場合も省略数を通知します。完全な内容は元のログファイルで確認してください。
+Large startup logs are read from the end up to the configured limit, with a notification if content was omitted. Each event retains up to 16,384 characters of its body and adds a truncation marker when necessary. Queue overflow is also reported with an omitted-event count. Consult the original log file for complete details.
 
-本MOD自身のログは再受信しません。受信コールバックから例外や再帰ログを発生させず、コールバック内の障害は次の更新処理でログと履歴へ報告します。
+The mod does not receive its own diagnostic logs. Listener callbacks isolate exceptions and avoid recursive logging; callback failures are reported in the log and history from the next update.
 
-本MODやAnchor Chain自体がロードされない場合、および描画できる状態に到達しない場合は、画面通知できません。
+On-screen notifications are unavailable if this mod or Anchor Chain fails to load, or if the game never reaches a state in which the overlay can render.
 
-## ビルドと検証
+## Building and verification
 
-Windowsの.NET 10 SDKを使用します。NuGetパッケージのダウンロードは不要です。`Directory.Build.local.props.example`を参考にローカルのゲーム・Anchor Chainの参照先を`Directory.Build.local.props`へ設定してください。
+Use the Windows .NET 10 SDK. No NuGet package download is required. Create `Directory.Build.local.props` using `Directory.Build.local.props.example` and set the paths to the local game and Anchor Chain.
 
 ```powershell
 .\build.ps1 -Test
 ```
 
-通常のビルドとパッケージ作成だけなら`-Test`を外します。成果物は`dist/BepInExLogAlerts`、配布ZIPの`dist/BepInExLogAlerts-v0.1.3.zip`、SHA256一覧の`dist/SHA256SUMS.txt`です。明示的に`-InstallLocal`を指定した場合だけ、ゲーム終了状態を確認してStreamingAssetsへインストールします。
+Omit `-Test` to build and package only. Outputs are `dist/BepInExLogAlerts`, `dist/BepInExLogAlerts-v0.1.3.zip`, and `dist/SHA256SUMS.txt`. Only an explicit `-InstallLocal` installs files into StreamingAssets, after checking that the game is stopped.
 
-検証にはログ解析、起動分と受信分の重複整理、連発・上限・画面停止中の表示時間、およびSea Power付属MonoでのBepInEx実体を用いた統合確認を含めます。Monoの検証は独立したプロセスで行い、ゲーム本体を起動せず、一時ログもゲームのログとは別の場所に作成・削除します。
+Verification covers log parsing, startup/live overlap reconciliation, repeated messages and capacity limits, notification timing while rendering is stalled, and integration with actual BepInEx using Sea Power's bundled Mono runtime. Mono checks run in a separate process without launching the game; temporary logs are created and removed outside the game's log directory.
 
-`StartupScreen.cs`はHarmony Startup Optimizerの同名実装と同じ判定を使用します。`ModActivation.cs`は既存のBulk Identification Requestsと同じMOD有効判定です。
+`StartupScreen.cs` uses the same readiness checks as Harmony Startup Optimizer. `ModActivation.cs` uses the same mod-enabled checks as Bulk Identification Requests.
 
-`docs/agent-memory.md`はローカル作業用であり、Git管理・配布対象外です。
+`docs/agent-memory.md` is local working memory and is excluded from Git and distribution packages.
 
-## 0.1.1の修正
+## Changes in 0.1.1
 
-履歴の選択・閉じる・コピー・スクロールを、新Input Systemから直接処理する方式に変更しました。IMGUIは描画だけに使用し、ゲームがOnGUIへマウスイベントを渡さない場合にも操作できるようにしています。1080p・4K・表示倍率変更時の座標変換、クリックの押下と解放、クリップボードに渡す選択済みログ、スクロールの回帰テストを追加しました。
+History selection, Close, Copy, and scrolling now use input read directly from the new Input System. IMGUI is used only for drawing, so history controls work when the game does not forward mouse events to OnGUI. Regression checks cover coordinate scaling at 1080p and 4K, display scaling, press/release behavior, the selected clipboard payload, and scrolling.
 
-## 0.1.2の変更
+## Changes in 0.1.2
 
-履歴に個別の通知抑止・解除のチェックボックスと一括解除を追加しました。設定を保存し、起動時通知・通常通知・表示中の通知へ共通の判定を適用します。再開時に過去の通知を出し直さず、抑止中のログも履歴には残します。
+Added per-message mute/unmute and a reset-all control in the history. Settings are saved and applied consistently to startup summaries, regular popups, and notifications already visible. Resuming notifications does not replay past popups; muted events remain in history.
 
-## 0.1.3の変更
+## Changes in 0.1.3
 
-履歴の全行にログレベルに応じた色の線を表示し、ポップアップと色の定義を共通にしました。選択状態は従来の背景強調で示します。
+All history rows now show severity stripes using the same color definition as popups. Selection is indicated by the existing background highlight.
 
-## ソースとリリース
+## Source and releases
 
-- [ソースコード](https://github.com/mebiustos-sea-power/BepInExLogAlerts)
-- [リリース](https://github.com/mebiustos-sea-power/BepInExLogAlerts/releases)
+- [Source code](https://github.com/mebiustos-sea-power/BepInExLogAlerts)
+- [Releases](https://github.com/mebiustos-sea-power/BepInExLogAlerts/releases)
 
-Workshop用アイコンは`assets/workshop/workshop_icon.jpg`で管理します。
+The Workshop icon is managed at `assets/workshop/workshop_icon.jpg`.
