@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><AssemblyName>BepInExLogAlerts.Tests</AssemblyName></PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="MonoSmoke\**\*" />
+    <Compile Include="..\src\Core\**\*.cs" LinkBase="Core" />
+  </ItemGroup>
+</Project>

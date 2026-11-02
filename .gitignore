@@ -1,0 +1,21 @@
+**/bin/
+**/obj/
+artifacts/
+dist/
+Directory.Build.local.props
+docs/agent-memory.md
+
+# Local binaries, logs and developer settings
+*.dll
+*.exe
+*.pdb
+*.mdb
+*.log
+*.dmp
+*.zip
+.env
+.env.*
+*.user
+*.suo
+.vs/
+.vscode/
