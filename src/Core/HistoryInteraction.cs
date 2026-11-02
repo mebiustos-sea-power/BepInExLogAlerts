@@ -24,7 +24,7 @@ internal sealed class HistoryLayout
 {
     internal const float RowStep = 76, RowHeight = 72;
     internal readonly float Scale, PixelHeight;
-    internal readonly UiRect Window, Close, List, Copy, Heading, Detail, ListTrack, DetailTrack, Suppress, ClearSuppression, PopupHeading, PopupHint, NotifyWarning, NotifyError, NotifyFatal;
+    internal readonly UiRect Window, Close, List, Copy, Heading, Detail, ListTrack, DetailTrack, Suppress, ClearSuppression, PopupHeading, NotifyWarning, NotifyError, NotifyFatal;
     internal HistoryLayout(float pixelWidth, float pixelHeight, float configuredScale)
     {
         PixelHeight = pixelHeight;
@@ -38,9 +38,8 @@ internal sealed class HistoryLayout
         NotifyWarning = new UiRect(Window.X + 16, Window.Y + 110, optionWidth, 28);
         NotifyError = new UiRect(NotifyWarning.Right, NotifyWarning.Y, optionWidth, 28);
         NotifyFatal = new UiRect(NotifyError.Right, NotifyWarning.Y, optionWidth, 28);
-        PopupHint = new UiRect(Window.X + 16, Window.Y + 144, width - 32, 22);
-        ClearSuppression = new UiRect(Window.X + 16, Window.Y + 174, Math.Min(360, width - 32), 32);
-        List = new UiRect(Window.X + 12, Window.Y + 220, Math.Min(390, width * 0.42f), height - 234);
+        ClearSuppression = new UiRect(Window.X + 16, Window.Y + 144, Math.Min(360, width - 32), 32);
+        List = new UiRect(Window.X + 12, Window.Y + 190, Math.Min(390, width * 0.42f), height - 204);
         float rightX = List.Right + 14, rightWidth = Window.Right - List.Right - 28;
         Heading = new UiRect(rightX, List.Y, rightWidth - 92, 50);
         Copy = new UiRect(Window.Right - 96, List.Y, 82, 30);

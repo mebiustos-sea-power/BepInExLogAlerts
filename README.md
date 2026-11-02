@@ -26,7 +26,7 @@ History remains available after notifications disappear. It retains up to 200 gr
 
 ## Choosing popup notification levels
 
-At the top of the history, check Warning, Error, and Fatal to choose which levels produce popups. All three are checked by default. The choices are independent, so Error can be disabled while Fatal remains enabled. Unchecked levels are still collected and retained in history.
+At the top of the history, the popup heading and its history-retention note share one line to leave more room for history and details. Check Warning, Error, and Fatal to choose which levels produce popups. All three are checked by default. The choices are independent, so Error can be disabled while Fatal remains enabled. Unchecked levels are still collected and retained in history.
 
 Changes take effect immediately and persist across game restarts. Disabling a level removes its visible popups and its contributions to startup summaries. Re-enabling it applies to future occurrences without replaying past messages or restoring removed counts. Individual mute settings are preserved and still apply to enabled levels.
 
@@ -119,7 +119,7 @@ Added independent Warning, Error, and Fatal checkboxes to the history. Checked l
 
 ## Changes in 0.1.5
 
-Restored "Reset all muted notifications" to clearing individual message mute settings only, preserving the Warning, Error, and Fatal selections. The button count and enabled state now depend only on individual mute settings. Settings file names, keys, and formats are unchanged; no manual configuration changes are required.
+Restored "Reset all muted notifications" to clearing individual message mute settings only, preserving the Warning, Error, and Fatal selections. The button count and enabled state now depend only on individual mute settings. The popup heading and its note share one line, leaving more vertical space for history and details. Settings file names, keys, and formats are unchanged; no manual configuration changes are required.
 
 ## Source and releases
 

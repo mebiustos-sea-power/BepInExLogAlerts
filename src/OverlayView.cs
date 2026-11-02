@@ -12,7 +12,7 @@ internal sealed class OverlayView : IDisposable
     private readonly Toasts toasts;
     private readonly HistoryInteraction history;
     private readonly NotificationRules rules;
-    private GUIStyle? title, text, small, row, detail, button, toggle;
+    private GUIStyle? title, text, small, row, detail, button, toggle, popupHeading;
     private Font? font;
     private double copiedUntil;
     internal bool HistoryOpen { get => history.Open; set => history.Open = value; }
@@ -97,11 +97,10 @@ internal sealed class OverlayView : IDisposable
         string status = ready ? journal.Items.Count + words.T("件の履歴", " history groups") : words.T("起動中のログを収集中。メニュー表示後に取り込みます。", "Collecting startup logs. Recovery completes after the main menu is shown.");
         if (journal.Evicted != 0) status += words.T(" ／ 古い履歴を", " / Old groups removed: ") + journal.Evicted + words.T("件削除", "");
         GUI.Label(new Rect(rect.x + 16, rect.y + 46, rect.width - 32, 38), status, small!);
-        GUI.Label(Rect(layout.PopupHeading), words.T("ポップアップ通知", "Popup notifications"), text!);
+        GUI.Label(Rect(layout.PopupHeading), words.T("ポップアップ通知（チェックを外しても履歴には記録します）", "Popup notifications (unchecked levels are still recorded in history)"), popupHeading!);
         DrawLevelToggle(layout.NotifyWarning, Severity.Warning, HistoryHit.NotifyWarning);
         DrawLevelToggle(layout.NotifyError, Severity.Error, HistoryHit.NotifyError);
         DrawLevelToggle(layout.NotifyFatal, Severity.Fatal, HistoryHit.NotifyFatal);
-        GUI.Label(Rect(layout.PopupHint), words.T("チェックを外しても履歴には記録します。", "Unchecked levels are still recorded in history."), small!);
         DrawButton(layout.ClearSuppression, words.T("通知しない設定をすべて解除", "Reset all muted notifications") + " (" + rules.Count + ")", HistoryHit.ClearSuppression, rules.Count != 0);
         AlertItem? selected = history.Selected;
         history.ClampScroll(layout);
@@ -177,6 +176,7 @@ internal sealed class OverlayView : IDisposable
         title = Style(GUI.skin.label, 19, FontStyle.Bold);
         text = Style(GUI.skin.label, 16);
         small = Style(GUI.skin.label, 13);
+        popupHeading = Style(GUI.skin.label, 16); popupHeading.wordWrap = false;
         row = Style(GUI.skin.button, 13); row.alignment = TextAnchor.UpperLeft;
         detail = Style(GUI.skin.textArea, 15);
         button = Style(GUI.skin.button, 16); button.alignment = TextAnchor.MiddleCenter;
