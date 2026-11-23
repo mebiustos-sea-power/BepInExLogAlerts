@@ -5,7 +5,7 @@ An Anchor Chain mod for Sea Power that displays BepInEx Warning / Error / Fatal 
 - Display name: BepInEx Log Alerts
 - Mod ID: `mebiustos.bepinexlogalerts`
 - DLL: `BepInExLogAlerts.dll`
-- Version: 0.1.7 (unreleased)
+- Version: 0.1.7
 - Requirements: Sea Power, BepInEx 5.4.x, Anchor Chain
 
 ## How it works
