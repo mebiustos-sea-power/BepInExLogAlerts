@@ -28,6 +28,8 @@ internal static class Program
         try
         {
             typeof(Paths).GetProperty("BepInExRootPath")!.GetSetMethod(true)!.Invoke(null, new object[] { root });
+            typeof(Paths).GetProperty("ConfigPath")!.GetSetMethod(true)!.Invoke(null, new object[] { root });
+            typeof(Paths).GetProperty("BepInExConfigPath")!.GetSetMethod(true)!.Invoke(null, new object[] { Path.Combine(root, "BepInEx.cfg") });
             disk = new DiskLogListener("LogOutput.log", LogLevel.Warning | LogLevel.Error | LogLevel.Fatal);
             Logger.Listeners.Add(disk);
             source = Logger.CreateLogSource("Integration Test");
@@ -59,7 +61,7 @@ internal static class Program
             Console.WriteLine("PASS Callback failures are isolated and available for reporting without recursion");
             Assembly game = Assembly.LoadFrom(Path.Combine(args[0], "Sea Power_Data", "Managed", "Seapower-Scripts.dll"));
             _ = new StartupScreen(game);
-            _ = new UiText(game, UiLanguage.Auto);
+            _ = new UiText(game);
             Console.WriteLine("PASS Actual game menu/loading/language member contracts resolve without creating singletons");
             string rulePath = Path.Combine(root, "notifications.mutedlogs");
             var store = new NotificationRuleStore(rulePath);
@@ -110,6 +112,7 @@ internal static class Program
             reloaded = new NotificationRules(store.Load(), store.Save);
             Check(reloaded.Count == 0 && new[] { Severity.Warning, Severity.Error, Severity.Fatal }.All(level => !reloaded.IsLevelEnabled(level)) && !reloaded.IsIndividuallySuppressed(a) && !reloaded.IsIndividuallySuppressed(b), "Mono did not preserve level choices while persisting bulk unmute after releasing the file lock.");
             Console.WriteLine("PASS Confirmed history clear preserves log/settings files; reception, released settings, failed-save rollback and confirmed bulk unmute work on game Mono");
+            LocalizationChecks.Run(game, args[1]);
             NoesisInputChecks.Run();
             return 0;
         }

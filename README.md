@@ -5,7 +5,7 @@ An Anchor Chain mod for Sea Power that displays BepInEx Warning / Error / Fatal 
 - Display name: BepInEx Log Alerts
 - Mod ID: `mebiustos.bepinexlogalerts`
 - DLL: `BepInExLogAlerts.dll`
-- Version: 0.1.6
+- Version: 0.1.7 (unreleased)
 - Requirements: Sea Power, BepInEx 5.4.x, Anchor Chain
 
 ## How it works
@@ -60,7 +60,7 @@ Level preferences and individual mute settings are written together to `BepInEx/
 2. Download and extract the ZIP from [Releases](https://github.com/mebiustos-sea-power/BepInExLogAlerts/releases/latest), then copy the `BepInExLogAlerts` folder into `Sea Power_Data/StreamingAssets`.
 3. Enable Anchor Chain and BepInEx Log Alerts in the mod manager, then restart the game.
 
-The GitHub ZIP contains the mod DLL, `_info.ini`, and this README. Building the repository does not publish an item to Steam Workshop.
+The GitHub ZIP contains the mod DLL, `_info.ini`, this README, and the `language_en` / `language_ja` resource folders. Keep these folders alongside the DLL. Building the repository does not publish an item to Steam Workshop.
 
 ## Configuration
 
@@ -75,11 +75,18 @@ The mod creates `BepInEx/config/mebiustos.bepinexlogalerts.cfg` on its first ena
 | Display / WarningSeconds | 6 | Warning duration in seconds. |
 | Display / ErrorSeconds | 10 | Error/Fatal duration in seconds. |
 | Display / RepeatSeconds | 10 | Time window for grouping identical messages. |
-| Display / Language | Auto | Follow the game's language, or select English / Japanese. |
 | Input / HistoryKey | F8 | Toggle the history. |
 | Limits / HistoryEntries | 200 | Maximum retained history groups. |
 | Limits / PendingEntries | 4096 | Maximum queued log events. |
 | Limits / StartupLogMegabytes | 8 | Maximum MiB read from the startup log file. |
+
+## Localization
+
+The UI follows the game's language setting and reads Sea Power's translation dictionary. English and Japanese texts are supplied as `language_en/bepinexlogalerts.json` and `language_ja/bepinexlogalerts.json`. Other languages use the game's English fallback until a translation is provided.
+
+To add a translation, copy the English file to `language_<code>/bepinexlogalerts.json` in a mod folder, retain the `BepInExLogAlerts` object and keys, and translate the values. Preserve numbered placeholders such as `{0}` and `{1}`; they may be reordered. Use `\n` for line breaks. Restart the game after changing language files.
+
+The former `Display / Language` option is removed. Any existing value is ignored; select the language in the game settings.
 
 ## Startup recovery and error handling
 
@@ -103,7 +110,7 @@ Use the Windows .NET 10 SDK. No NuGet package download is required. Create `Dire
 .\build.ps1 -Test
 ```
 
-Omit `-Test` to build and package only. Outputs are `dist/BepInExLogAlerts`, `dist/BepInExLogAlerts-v0.1.6.zip`, and `dist/SHA256SUMS.txt`. Only an explicit `-InstallLocal` installs files into StreamingAssets, after checking that the game is stopped.
+Omit `-Test` to build and package only. Outputs are `dist/BepInExLogAlerts`, `dist/BepInExLogAlerts-v0.1.7.zip`, and `dist/SHA256SUMS.txt`. Only an explicit `-InstallLocal` installs files into StreamingAssets, after checking that the game is stopped.
 
 Verification covers log parsing, startup/live overlap reconciliation, repeated messages and capacity limits, notification timing while rendering is stalled, and integration with actual BepInEx using Sea Power's bundled Mono runtime. Mono checks run in a separate process without launching the game; temporary logs are created and removed outside the game's log directory.
 

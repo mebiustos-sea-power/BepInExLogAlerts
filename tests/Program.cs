@@ -797,6 +797,7 @@ internal static class Program
                 gate.Observe(12, false, true);
                 Check(!gate.Blocked, "A fresh click after the completed closing release was swallowed.");
             });
+            LocalizationChecks.Run(Test);
             Console.WriteLine("Passed " + count + " behavior checks."); return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }

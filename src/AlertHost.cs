@@ -32,7 +32,7 @@ public sealed class AlertHost : MonoBehaviour
     {
         this.settings = settings; this.mailbox = mailbox; this.listener = listener;
         screen = new StartupScreen(game);
-        words = new UiText(game, settings.Language);
+        words = new UiText(game);
         notifications = new NotificationCenter(settings.HistoryLimit, settings.RepeatSeconds, settings.WarningSeconds, settings.ErrorSeconds, rules);
         view = new OverlayView(settings, words, notifications);
         inputBlocker = new NoesisInputBlocker(BlockNoesisInput, error =>
@@ -48,13 +48,14 @@ public sealed class AlertHost : MonoBehaviour
         try
         {
             double now = Time.realtimeSinceStartupAsDouble;
-            ReadOverlayInput();
             if (now >= nextSample)
             {
                 nextSample = now + 0.25;
                 words!.Refresh();
                 if (!menuDetected) menuDetected = screen!.MenuVisible();
             }
+            if (!words!.Ready) return;
+            ReadOverlayInput();
             Exception? failure = listener!.TakeFailure();
             if (failure != null)
             { BepInEx.Logging.Logger.Listeners.Remove(listener); Problem("Log reception stopped", failure); }
@@ -76,7 +77,7 @@ public sealed class AlertHost : MonoBehaviour
                 long lost = mailbox!.TakeDropped();
                 if (lost != 0)
                 {
-                    var record = new LogRecord(Severity.Warning, ModInfo.Name, words!.T("ログが大量発生したため、受信待ちログを", "The pending log limit was reached; ") + lost + words.T("件省略しました。詳細は元のログを確認してください。", " events were omitted. Check the original log for details."), false, DateTimeOffset.Now);
+                    var record = new LogRecord(Severity.Warning, ModInfo.Name, words!.T(TextKey.PendingLogLimit, lost), false, DateTimeOffset.Now);
                     notifications!.Receive(record, now);
                 }
             }
@@ -160,7 +161,7 @@ public sealed class AlertHost : MonoBehaviour
         startupCaptured = captured;
         bool includeUnity = settings!.IncludeUnity;
         if (snapshot?.Truncated == true)
-            problems.Add(new LogRecord(Severity.Warning, ModInfo.Name, words!.T("起動ログが読込上限を超えたため、末尾の", "The startup log exceeded the read limit. Only the last ") + settings.StartupMegabytes + words.T(" MiBを取り込みました。", " MiB was recovered."), true));
+            problems.Add(new LogRecord(Severity.Warning, ModInfo.Name, words!.T(TextKey.StartupLogLimit, settings.StartupMegabytes), true));
         import = Task.Run(() =>
         {
             var records = new List<LogRecord>();
@@ -183,12 +184,12 @@ public sealed class AlertHost : MonoBehaviour
     private void Problem(string area, Exception error)
     {
         Plugin.Log.LogError(area + ": " + error);
-        problems.Add(new LogRecord(Severity.Error, ModInfo.Name, words!.T("ログ通知の一部を処理できませんでした。", "Part of log monitoring could not be completed. ") + "\n" + area + ": " + error, !ready, DateTimeOffset.Now));
+        problems.Add(new LogRecord(Severity.Error, ModInfo.Name, words!.T(TextKey.MonitoringProblem, area, error), !ready, DateTimeOffset.Now));
     }
 
     private void OnGUI()
     {
-        if (closed || view == null) return;
+        if (closed || view == null || words?.Ready != true) return;
         try
         {
             // Same first-menu repaint boundary as Harmony Startup Optimizer.

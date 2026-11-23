@@ -5,6 +5,7 @@ param(
     [switch]$InstallLocal
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'tools\copy-package.ps1')
 $taskDotnet = Join-Path $env:ProgramFiles 'dotnet\dotnet.exe'
 if (-not (Test-Path $taskDotnet)) { throw 'A .NET SDK is required.' }
 $taskProperties = @('-p:UseSharedCompilation=false')
@@ -39,6 +40,7 @@ function Invoke-TaskProcess([string]$TaskExecutable, [string[]]$TaskArguments) {
 function Invoke-TaskDotnet([string[]]$TaskArguments) { Invoke-TaskProcess $taskDotnet $TaskArguments }
 Invoke-TaskDotnet (@('build', (Join-Path $PSScriptRoot 'src\BepInExLogAlerts.csproj'), '-c', 'Release', '--nologo', '--verbosity', 'minimal') + $taskProperties)
 if ($Test) {
+    Invoke-TaskProcess (Join-Path $PSHOME 'powershell.exe') @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',(Join-Path $PSScriptRoot 'tools\test-package.ps1'))
     Invoke-TaskDotnet (@('build', (Join-Path $PSScriptRoot 'tests\BepInExLogAlerts.Tests.csproj'), '-c', 'Release', '--nologo', '--verbosity', 'minimal') + $taskProperties)
     Invoke-TaskDotnet @((Join-Path $PSScriptRoot 'tests\bin\Release\net10.0\BepInExLogAlerts.Tests.dll'))
     Invoke-TaskDotnet (@('build', (Join-Path $PSScriptRoot 'tests\MonoSmoke\BepInExLogAlerts.MonoSmoke.csproj'), '-c', 'Release', '--nologo', '--verbosity', 'minimal') + $taskProperties)
@@ -57,7 +59,7 @@ if ($Test) {
 $taskPackage = Join-Path $PSScriptRoot 'dist\BepInExLogAlerts'
 New-Item -ItemType Directory -Force $taskPackage | Out-Null
 Copy-Item (Join-Path $PSScriptRoot 'src\bin\Release\netstandard2.1\BepInExLogAlerts.dll') $taskPackage -Force
-Copy-Item (Join-Path $PSScriptRoot 'package\_info.ini') $taskPackage -Force
+Copy-PackageFiles -SourceDirectory (Join-Path $PSScriptRoot 'package') -DestinationDirectory $taskPackage
 Copy-Item (Join-Path $PSScriptRoot 'README.md') $taskPackage -Force
 Write-Output "Package: $taskPackage"
 [xml]$taskProject = Get-Content (Join-Path $PSScriptRoot 'src\BepInExLogAlerts.csproj')
@@ -67,9 +69,10 @@ Add-Type -AssemblyName System.IO.Compression
 $taskZipStream = [IO.File]::Open($taskZip, [IO.FileMode]::Create, [IO.FileAccess]::ReadWrite)
 $taskArchive = [IO.Compression.ZipArchive]::new($taskZipStream, [IO.Compression.ZipArchiveMode]::Create)
 try {
-    foreach ($taskName in @('BepInExLogAlerts.dll', '_info.ini', 'README.md')) {
+    foreach ($taskFile in (Get-ChildItem -LiteralPath $taskPackage -File -Recurse)) {
+        $taskName = $taskFile.FullName.Substring($taskPackage.Length + 1).Replace('\', '/')
         $taskEntry = $taskArchive.CreateEntry(('BepInExLogAlerts/' + $taskName), [IO.Compression.CompressionLevel]::Optimal)
-        $taskInput = [IO.File]::OpenRead((Join-Path $taskPackage $taskName))
+        $taskInput = [IO.File]::OpenRead($taskFile.FullName)
         $taskOutput = $taskEntry.Open()
         try { $taskInput.CopyTo($taskOutput) }
         finally { $taskOutput.Dispose(); $taskInput.Dispose() }
@@ -86,7 +89,7 @@ if ($InstallLocal) {
     if ($taskGameProcesses) { throw 'Close Sea Power before installing the mod.' }
     $taskDestination = Join-Path $GameDirectory 'Sea Power_Data\StreamingAssets\BepInExLogAlerts'
     New-Item -ItemType Directory -Force $taskDestination | Out-Null
-    Get-ChildItem $taskPackage -File | ForEach-Object { Copy-Item $_.FullName (Join-Path $taskDestination $_.Name) -Force }
+    Copy-PackageFiles -SourceDirectory $taskPackage -DestinationDirectory $taskDestination
     Write-Output "Installed: $taskDestination"
     Write-Output 'Enable BepInEx Log Alerts in the mod manager, then restart Sea Power.'
 }

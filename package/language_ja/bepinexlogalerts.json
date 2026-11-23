@@ -1,0 +1,32 @@
+{
+  "BepInExLogAlerts": {
+    "StartupHeading": "起動中のログ",
+    "StartupCounts": "警告 {0}件 ・ エラー {1}件",
+    "HistoryHint": "{0}：履歴・詳細",
+    "HistoryTitle": "{0} — 履歴",
+    "Close": "閉じる",
+    "HistoryCount": "{0}件の履歴",
+    "CollectingStartup": "起動中のログを収集中。メニュー表示後に取り込みます。",
+    "StatusWithEvictions": "{0} ／ 古い履歴を{1}件削除",
+    "ClearHistory": "履歴をクリア",
+    "PopupHeading": "ポップアップ通知（チェックを外しても履歴には記録します）",
+    "ResetIndividualMutes": "個別ログの通知抑止をすべて解除 ({0})",
+    "StartupStamp": "起動時",
+    "MutedTag": "[通知しない]",
+    "NoHistory": "履歴はありません。",
+    "Copied": "コピー済",
+    "Copy": "コピー",
+    "SuppressMessage": "今後、このログを通知しない",
+    "ResetMutesTitle": "通知抑止の一括解除",
+    "ClearHistoryConfirmation": "この画面の履歴をすべて消去しますか？\nログファイルや通知設定は変更しません。",
+    "ResetMutesConfirmation": "個別ログの通知抑止を {0} 件すべて解除しますか？",
+    "Cancel": "キャンセル",
+    "ConfirmClearHistory": "クリアする",
+    "ConfirmResetMutes": "解除する",
+    "ClearHistoryTooltip": "この画面の履歴を消去します。\nログファイルや通知設定は変更しません。",
+    "ResetMutesTooltip": "個別ログの通知抑止をすべて解除します。\nWarning／Error／Fatalの選択は変更しません。",
+    "PendingLogLimit": "ログが大量発生したため、受信待ちログを{0}件省略しました。詳細は元のログを確認してください。",
+    "StartupLogLimit": "起動ログが読込上限を超えたため、末尾の{0} MiBを取り込みました。",
+    "MonitoringProblem": "ログ通知の一部を処理できませんでした。\n{0}: {1}"
+  }
+}

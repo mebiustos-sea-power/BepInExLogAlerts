@@ -1,0 +1,32 @@
+{
+  "BepInExLogAlerts": {
+    "StartupHeading": "Startup logs",
+    "StartupCounts": "Warnings: {0}  |  Errors: {1}",
+    "HistoryHint": "{0}: history / details",
+    "HistoryTitle": "{0} — History",
+    "Close": "Close",
+    "HistoryCount": "{0} history groups",
+    "CollectingStartup": "Collecting startup logs. Recovery completes after the main menu is shown.",
+    "StatusWithEvictions": "{0} / Old groups removed: {1}",
+    "ClearHistory": "Clear history",
+    "PopupHeading": "Popup notifications (all levels stay in history)",
+    "ResetIndividualMutes": "Reset all individual message mutes ({0})",
+    "StartupStamp": "Startup",
+    "MutedTag": "[Muted]",
+    "NoHistory": "No history entries.",
+    "Copied": "Copied",
+    "Copy": "Copy",
+    "SuppressMessage": "Do not notify me of this log again",
+    "ResetMutesTitle": "Reset individual mutes",
+    "ClearHistoryConfirmation": "Clear all history entries in this window?\nLog files and notification settings are unchanged.",
+    "ResetMutesConfirmation": "Reset all {0} individual message mute settings?",
+    "Cancel": "Cancel",
+    "ConfirmClearHistory": "Clear history",
+    "ConfirmResetMutes": "Reset mutes",
+    "ClearHistoryTooltip": "Clears this window's history.\nLog files and notification settings are unchanged.",
+    "ResetMutesTooltip": "Resets individual message mute settings.\nWarning, Error, and Fatal selections are unchanged.",
+    "PendingLogLimit": "The pending log limit was reached; {0} events were omitted. Check the original log for details.",
+    "StartupLogLimit": "The startup log exceeded the read limit. Only the last {0} MiB was recovered.",
+    "MonitoringProblem": "Part of log monitoring could not be completed.\n{0}: {1}"
+  }
+}

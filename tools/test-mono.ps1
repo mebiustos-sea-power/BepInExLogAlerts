@@ -26,7 +26,7 @@ $taskSearch = @($taskManaged,$taskCore,$taskPlugin,(Split-Path $taskTests -Paren
 [BepInExLogAlertsNativeMono]::mono_set_dirs($taskManaged,(Join-Path $GameDirectory 'MonoBleedingEdge\etc'))
 [BepInExLogAlertsNativeMono]::mono_set_assemblies_path($taskSearch)
 $taskArguments = @('BepInExLogAlertsMono','--runtime=v4.0.30319',$taskTests)
-$taskArguments += $GameDirectory
+$taskArguments += @($GameDirectory, (Join-Path $taskRoot 'package'))
 $taskStrings = @($taskArguments | ForEach-Object { [Runtime.InteropServices.Marshal]::StringToHGlobalAnsi($_) })
 $taskVector = [Runtime.InteropServices.Marshal]::AllocHGlobal([IntPtr]::Size * ($taskStrings.Count + 1))
 try {

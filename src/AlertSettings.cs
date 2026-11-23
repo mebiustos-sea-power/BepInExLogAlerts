@@ -4,15 +4,12 @@ using UnityEngine.InputSystem;
 
 namespace BepInExLogAlerts;
 
-internal enum UiLanguage { Auto, English, Japanese }
-
 internal sealed class AlertSettings
 {
     internal readonly bool IncludeUnity;
     internal readonly int HistoryLimit, MailboxLimit, StartupMegabytes;
     internal readonly float Width, Top, Scale, WarningSeconds, ErrorSeconds, RepeatSeconds;
     internal readonly Key HistoryKey;
-    internal readonly UiLanguage Language;
     internal AlertSettings(string path)
     {
         var config = new ConfigFile(path, false) { SaveOnConfigSet = false };
@@ -27,7 +24,6 @@ internal sealed class AlertSettings
         ErrorSeconds = config.Bind("Display", "ErrorSeconds", 10f, new ConfigDescription("Error/Fatal duration after the first repaint.", new AcceptableValueRange<float>(2, 120))).Value;
         RepeatSeconds = config.Bind("Display", "RepeatSeconds", 10f, new ConfigDescription("Combine identical live log messages within this many seconds.", new AcceptableValueRange<float>(1, 300))).Value;
         HistoryKey = config.Bind("Input", "HistoryKey", Key.F8, "Toggle history. Escape also closes history.").Value;
-        Language = config.Bind("Display", "Language", UiLanguage.Auto, "Auto follows the game language.").Value;
         if (HistoryKey == Key.None) throw new InvalidDataException("HistoryKey must be a keyboard key.");
         config.Save();
     }
